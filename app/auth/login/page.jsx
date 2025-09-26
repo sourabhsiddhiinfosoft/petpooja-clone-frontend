@@ -35,7 +35,7 @@ export default function LoginPage() {
     if (!validate()) return;
     setLoading(true);
     try {
-      const BaseURL = process.env.NEXT_PUBLIC_API_URL || "https://petpooja.siswebapp.com/";
+      const BaseURL = process.env.NEXT_PUBLIC_API_URL || "https://petpooja-clone-backend.vercel.app" || "https://petpooja.siswebapp.com";
       // const response = await axios.post(`https://lpnllwkq-5000.inc1.devtunnels.ms/auth/login`, {
       const response = await axios.post(`${BaseURL}/auth/login`, {
         email,
