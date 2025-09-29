@@ -1,7 +1,12 @@
+import { get } from 'http';
 import { baseApi } from './baseApi';
 
 export const ownerApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
+    //get restaurant details
+    getRestaurantDetails: build.query({ query: (id) => ({ url: `/restaurants/${id}`, method: 'GET' }) }),
+    updateRestaurantDetails: build.mutation({ query: ({ id, ...body }) => ({ url: `/restaurants/${id}`, method: 'PUT', body }) }),
+    
     //Categories
     addCategory: build.mutation({ query: (body) => ({ url: '/categories', method: 'POST', body }), invalidatesTags: ['Menu'] }),
     getCategories: build.query({ query: () => ({ url: '/categories', method: 'GET' }), providesTags: ['Menu'] }),
@@ -41,6 +46,8 @@ export const ownerApi = baseApi.injectEndpoints({
 });
 
 export const {
+  useGetRestaurantDetailsQuery,
+  useUpdateRestaurantDetailsMutation,
   useAddCategoryMutation,
   useGetCategoriesQuery,
   useUpdateCategoryMutation,

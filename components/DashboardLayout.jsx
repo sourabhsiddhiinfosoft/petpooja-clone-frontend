@@ -41,6 +41,7 @@ const DashboardLayout = ({ children, userType = 'admin' }) => {
       return [
         { name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
         { name: 'RESTAURANT', isHeader: true },
+        { name: 'Restaurant Details', href: `/${userType}/restaurant`, icon: '🏪' },
         { name: 'Profile', href: `/${userType}/profile`, icon: '🏷️' },
         { name: 'Categories', href: `/${userType}/categories`, icon: '🗂️' },
         { name: 'Menu Items', href: `/${userType}/menu-items`, icon: '🍽️' },

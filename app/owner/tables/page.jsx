@@ -11,9 +11,6 @@ import Cookies from 'js-cookie'; // Add this import
 
 export default function OwnerTables() {
   const { data: userData } = useMeQuery();
-
-  const token = Cookies.get('restaurantId');
-  console.log("restaurantId from cookie:", token);
   const restaurantId = userData?.restaurantId;
   const { data: tablesData, isLoading, isError } = useGetTablesQuery(restaurantId);
   const { data: areasData } = useGetAreasQuery(restaurantId);
