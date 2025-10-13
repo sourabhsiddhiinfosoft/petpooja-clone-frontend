@@ -34,11 +34,11 @@ export function ModalBox({
       onClick={onClose} // <-- close on overlay click
     >
       <div
-        className={`relative w-full ${sizeClasses[size] || sizeClasses.md} rounded-md bg-white shadow-lg dark:bg-gray-800`}
+        className={`relative w-full max-h-[90vh] flex flex-col ${sizeClasses[size] || sizeClasses.md} rounded-md bg-white shadow-lg dark:bg-gray-800`}
         onClick={(e) => e.stopPropagation()} // <-- prevent close on modal click
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="flex items-center justify-between border-b px-4 py-3 flex-shrink-0">
           <h5
             id="modal-title"
             className="text-lg font-semibold text-gray-800 dark:text-gray-100"
@@ -55,11 +55,13 @@ export function ModalBox({
         </div>
 
         {/* Body */}
-        <div className="p-4 text-gray-700 dark:text-gray-200">{children}</div>
+        <div className="flex-1 overflow-y-auto p-4 text-gray-700 dark:text-gray-200">
+          {children}
+        </div>
 
         {/* Footer */}
         {showFooter && (
-          <div className="flex justify-end gap-3 border-t px-4 py-3">
+          <div className="flex justify-end gap-3 border-t px-4 py-3 flex-shrink-0">
             <button
               type="button"
               onClick={onClose}

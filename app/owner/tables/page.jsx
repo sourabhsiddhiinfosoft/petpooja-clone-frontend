@@ -8,15 +8,21 @@ import { useMemo, useState } from 'react';
 import { ModalBox } from '../../../components/ModalBox';
 import toast from 'react-hot-toast';
 import Cookies from 'js-cookie'; // Add this import
+import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
+import { NoDataAvailableCard } from '../../../components/NoDataAvailable';
+import Select from 'react-select'; // Import React Select
 
 export default function OwnerTables() {
-  const { data: userData } = useMeQuery();
+  const { currentBranch, branches, user } = useCurrentBranch();
+  const restaurantId = user?.restaurantId || "";
+  const branchId = currentBranch?._id || "";
 
-  const token = Cookies.get('restaurantId');
-  console.log("restaurantId from cookie:", token);
-  const restaurantId = userData?.restaurantId;
-  const { data: tablesData, isLoading, isError } = useGetTablesQuery(restaurantId);
-  const { data: areasData } = useGetAreasQuery(restaurantId);
+  
+  // const q = `${restaurantId}`;
+  const q = `${restaurantId}${branchId ? `?branchId=${branchId}` : ""}`
+
+  const { data: tablesData = [], isLoading, isError } = useGetTablesQuery(q, { skip: !restaurantId });
+  const { data: areasData = [] } = useGetAreasQuery(q, { skip: !restaurantId });
 
   const [createTable] = useAddTableMutation();
   const [deleteTable] = useDeleteTableMutation();
@@ -26,54 +32,240 @@ export default function OwnerTables() {
   const [selectedTable, setSelectedTable] = useState(null);
   const [newTable, setNewTable] = useState({
     restaurantId: restaurantId,
-    area: null,
+    area: '', // ID string
     name: '',
     seats: 1,
     isActive: true,
-  })
+    type: 'single', // New: Apply To type
+    branchIds: branchId ? [branchId] : [], // New: Pre-select current branch as array
+    branchId, // For single-branch fallback
+  });
 
+  // Filter tables
   const filteredData = useMemo(() => {
-    return tablesData?.filter((cat) => (
-      cat.name.toLowerCase().includes(search.toLowerCase()) ||
-      cat.area.name.toLowerCase().includes(search.toLowerCase()
-      )))
+    return tablesData.filter((table) =>
+      table.name.toLowerCase().includes(search.toLowerCase()) ||
+      table.area?.name?.toLowerCase().includes(search.toLowerCase())
+    );
   }, [search, tablesData]);
 
+  // Prepare options for React Select (areas)
+  const areaOptions = useMemo(() => {
+    return areasData.map((area) => ({
+      value: area._id,
+      label: area.name,
+    }));
+  }, [areasData]);
+
+  // Prepare options for React Select (branches)
+  const branchOptions = useMemo(() => {
+    return branches.map((branch) => ({
+      value: branch._id,
+      label: `${branch.name} - ${branch.address?.city || 'N/A'} (${branch.status})`,
+    }));
+  }, [branches]);
+
+  // Dark mode styles for React Select
+  const darkStyles = {
+    control: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isFocused ? '#374151' : '#1f2937',
+      borderColor: state.isFocused ? '#4f46e5' : '#4b5563',
+      color: '#f9fafb',
+      boxShadow: state.isFocused ? '0 0 0 1px #4f46e5' : 'none',
+      '&:hover': {
+        borderColor: '#6b7280',
+      },
+    }),
+    menu: (provided) => ({
+      ...provided,
+      backgroundColor: '#1f2937',
+      borderColor: '#4b5563',
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected
+        ? '#4f46e5'
+        : state.isFocused
+          ? '#374151'
+          : '#1f2937',
+      color: state.isSelected ? '#ffffff' : '#f9fafb',
+      '&:hover': {
+        backgroundColor: '#374151',
+      },
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: '#9ca3af',
+    }),
+    input: (provided) => ({
+      ...provided,
+      color: '#f9fafb',
+    }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: '#f9fafb',
+    }),
+    multiValue: (provided) => ({
+      ...provided,
+      backgroundColor: '#374151',
+      color: '#f9fafb',
+    }),
+    multiValueLabel: (provided) => ({
+      ...provided,
+      color: '#f9fafb',
+    }),
+    multiValueRemove: (provided) => ({
+      ...provided,
+      color: '#d1d5db',
+      '&:hover': {
+        backgroundColor: '#4b5563',
+        color: '#ffffff',
+      },
+    }),
+    indicatorSeparator: (provided) => ({
+      ...provided,
+      backgroundColor: '#4b5563',
+    }),
+    dropdownIndicator: (provided) => ({
+      ...provided,
+      color: '#9ca3af',
+    }),
+  };
+
+  // Get current form values for display (unified for add/edit)
+  const getFormValue = (field) => {
+    return modalType === 'add' ? newTable[field] : selectedTable?.[field] || '';
+  };
+
+  // Get current area option for React Select
+  const getCurrentAreaOption = () => {
+    const currentAreaId = getFormValue('area');
+    return areaOptions.find((opt) => opt.value === currentAreaId) || null;
+  };
+
+  // Get current branch options for React Select
+  const getCurrentBranchOptions = () => {
+    const currentBranchIds = getFormValue('branchIds') || [];
+    return currentBranchIds.map((id) =>
+      branchOptions.find((opt) => opt.value === id)
+    ).filter(Boolean); // Filter out nulls
+  };
 
   const handleOpen = (type, item) => {
     if (type === 'add') {
       setNewTable({
+        restaurantId: restaurantId,
+        area: '',
         name: '',
-        category: '',
-        price: '',
-        description: ''
+        seats: 1,
+        isActive: true,
+        type: 'single', // New
+        branchIds: branchId ? [branchId] : [], // New: Pre-select current
+        branchId,
       });
     } else {
-      setSelectedTable(item ? { ...item } : null);
+      // For edit: Ensure area/branchIds/type are set
+      setSelectedTable(item ? {
+        ...item,
+        area: item.area?._id || '', // Ensure ID string
+        branchIds: item.branchIds || [branchId], // New: Ensure array
+        type: item.type || 'single', // New
+      } : null);
     }
     setModalType(type);
   };
 
+  // Handle area change with React Select (unified for add/edit)
+  const handleAreaChange = (selectedOption) => {
+    const areaId = selectedOption ? selectedOption.value : '';
+    if (modalType === 'add') {
+      setNewTable((prev) => ({ ...prev, area: areaId }));
+    } else {
+      setSelectedTable((prev) => ({ ...prev, area: areaId }));
+    }
+  };
+
+  // Handle branch change with React Select (unified for add/edit)
+  const handleBranchChange = (selectedOptions) => {
+    let newBranchIds;
+    const currentType = getFormValue('type');
+
+    if (currentType === 'single') {
+      newBranchIds = selectedOptions ? [selectedOptions.value] : [];
+    } else if (currentType === 'multiple') {
+      newBranchIds = selectedOptions ? selectedOptions.map((opt) => opt.value) : [];
+    } else {
+      newBranchIds = []; // All: empty
+    }
+
+    if (modalType === 'add') {
+      setNewTable((prev) => ({ ...prev, branchIds: newBranchIds }));
+    } else {
+      setSelectedTable((prev) => ({ ...prev, branchIds: newBranchIds }));
+    }
+  };
+
   const handleInputChange = (field, value) => {
     if (modalType === 'add') {
-      setNewTable((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
+      let updated = { ...newTable, [field]: value };
+
+      if (field === 'type') {
+        if (value === 'all') {
+          updated.branchIds = []; // Empty for all
+        } else if (value === 'single' && newTable.branchIds.length > 1) {
+          updated.branchIds = [newTable.branchIds[0] || branchId]; // Keep first or current
+        }
+      }
+
+      setNewTable(updated);
     } else {
-      setSelectedTable((prev) => ({
-        ...prev,
-        [field]: value,
-      }));
+      let updated = { ...selectedTable, [field]: value };
+
+      if (field === 'type') {
+        if (value === 'all') {
+          updated.branchIds = []; // Empty for all
+        } else if (value === 'single' && selectedTable.branchIds.length > 1) {
+          updated.branchIds = [selectedTable.branchIds[0]]; // Keep first
+        }
+      }
+
+      setSelectedTable(updated);
     }
   };
 
   const handleClose = () => {
     setSelectedTable(null);
     setModalType(null);
+    // Reset newTable on close
+    setNewTable({
+      restaurantId: restaurantId,
+      area: '',
+      name: '',
+      seats: 1,
+      isActive: true,
+      type: 'single',
+      branchIds: branchId ? [branchId] : [],
+      branchId,
+    });
   };
 
   const handleConfirm = async () => {
+    // Validation: Ensure area is selected
+    const currentArea = getFormValue('area');
+    if (!currentArea) {
+      toast.error('Please select an area.');
+      return;
+    }
+
+    // New: Branch validation
+    const currentType = getFormValue('type');
+    const currentBranchIds = getFormValue('branchIds') || [];
+    if ((currentType === 'single' || currentType === 'multiple') && currentBranchIds.length === 0) {
+      toast.error('Please select at least one branch.');
+      return;
+    }
+
     if (modalType === 'delete') {
       if (selectedTable && selectedTable._id) {
         await handleDelete(selectedTable._id);
@@ -89,8 +281,16 @@ export default function OwnerTables() {
   };
 
   const handleUpdate = async () => {
+    if (!selectedTable?._id) return;
     try {
-      await updateTable(selectedTable).unwrap();
+      const updatedTable = {
+        ...selectedTable,
+        restaurantId,
+        branchId,
+        area: selectedTable.area, // Ensure ID
+        branchIds: selectedTable.type === 'all' ? [] : (selectedTable.branchIds || []), // New: Process branchIds
+      };
+      await updateTable(updatedTable).unwrap();
       toast.success('Table updated successfully.');
     } catch (error) {
       toast.error('Failed to update table.');
@@ -99,7 +299,14 @@ export default function OwnerTables() {
 
   const handleCreate = async () => {
     try {
-      await createTable(newTable).unwrap();
+      const tableToCreate = {
+        ...newTable,
+        restaurantId,
+        branchId,
+        area: newTable.area, // Ensure ID
+        branchIds: newTable.type === 'all' ? [] : (newTable.branchIds || []), // New: Process branchIds
+      };
+      await createTable(tableToCreate).unwrap();
       toast.success('Table added successfully.');
     } catch (error) {
       toast.error('Failed to add table.');
@@ -114,7 +321,6 @@ export default function OwnerTables() {
       toast.error('Failed to delete table.');
     }
   };
-
 
   return (
     <DashboardLayout userType="owner">
@@ -169,15 +375,22 @@ export default function OwnerTables() {
                       className="p-1 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
                       onClick={() => handleOpen('delete', table)}
                     >
-                      {/* <DeleteIcon width={15} height={15} className={'fill-red-600'} aria-label="Delete area" /> */}
                       <TrashIcon className="h-4 w-4" aria-label="Delete table" />
                     </button>
                   </div>
                   <h2 className="text-lg font-semibold mb-2">{table?.name}</h2>
-                  <p className="text-gray-600">Area: {table?.area?.name || 0}</p>
+                  <p className="text-gray-600">Area: {table?.area?.name || 'N/A'}</p>
                   <p className="text-gray-600">Seats: {table?.seats || 0}</p>
+                  {/* New: Show branch info if available */}
+                  {table.branchIds && (
+                    <p className="text-gray-600 text-sm">Branches: {table.branchIds.length}</p>
+                  )}
                 </div>
               ))
+            )}
+
+            {!isLoading && filteredData?.length === 0 && (
+              <NoDataAvailableCard />
             )}
           </div>
         </div>
@@ -209,22 +422,24 @@ export default function OwnerTables() {
               <p>
                 <b>Name:</b> {selectedTable?.name || 'N/A'}
               </p>
-
-
               <p>
                 <b>Area Name:</b> {selectedTable?.area?.name || 'N/A'}
               </p>
               <p>
-                <b>Seat's</b>:{selectedTable?.seats || 0}
+                <b>Seats:</b> {selectedTable?.seats || 0}
               </p>
-              {/* <p>
-                                      <b>Status:</b>{' '}
-                                      {selectedTable?.isActive ? (
-                                        <span className="text-green-600 font-semibold">Active</span>
-                                      ) : (
-                                        <span className="text-gray-400">Inactive</span>
-                                      )}
-                                    </p> */}
+              {/* New: Show type and branches */}
+              <p>
+                <b>Apply To:</b> {selectedTable?.type || 'N/A'} | <b>Branches:</b> {selectedTable?.branchIds?.length || 0}
+              </p>
+              <p>
+                <b>Status:</b>{' '}
+                {selectedTable?.isActive ? (
+                  <span className="text-green-600 font-semibold">Active</span>
+                ) : (
+                  <span className="text-gray-400">Inactive</span>
+                )}
+              </p>
             </div>
           )}
 
@@ -240,7 +455,7 @@ export default function OwnerTables() {
                 <label className="block mb-1 font-medium">Table Name</label>
                 <input
                   type="text"
-                  value={modalType === 'add' ? newTable.name : selectedTable.name}
+                  value={getFormValue('name')}
                   onChange={(e) => handleInputChange('name', e.target.value)}
                   placeholder="Name"
                   className="border rounded px-3 py-2 w-full"
@@ -251,40 +466,95 @@ export default function OwnerTables() {
               <hr className="my-2" />
 
               <div className='mb-2'>
-                <label className="block mb-1 font-medium">Seat's</label>
+                <label className="block mb-1 font-medium">Seats</label>
                 <input
                   type="number"
-                  value={modalType === 'add' ? newTable.seats : selectedTable.seats}
+                  value={getFormValue('seats')}
                   onChange={(e) => handleInputChange('seats', e.target.value)}
                   placeholder="Enter number of seats"
-                  className="border rounded px-3 py-2 w-full [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield]"
+                  className="border rounded px-3 py-2 w-full"
                   required
                   min="1"
                   step="1"
-
                 />
               </div>
-              <hr />
+              <hr className="my-2" />
+
               <div className='mb-2'>
-                <label className="block mb-1 font-medium">Area's</label>
+                <label className="block mb-1 font-medium">Area</label>
+                <Select
+                  options={areaOptions}
+                  value={getCurrentAreaOption()}
+                  onChange={handleAreaChange}
+                  placeholder="Select an area"
+                  className="basic-single"
+                  classNamePrefix="select"
+                  isSearchable={true}
+                  isClearable={true}
+                  isDisabled={!areasData || areasData.length === 0}
+                  styles={darkStyles}
+                />
+              </div>
+              <hr className="my-2" />
+
+              {/* New: Apply To Type Select */}
+              <div className='mb-2'>
+                <label className="block mb-1 font-medium">Apply To</label>
                 <select
-                  value={modalType === 'add' ? newTable.area :selectedTable.area?._id}
-                  onChange={(e) => setNewTable((prev) => ({ ...prev, area: e.target.value }))}
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-                  required
+                  value={getFormValue('type')}
+                  onChange={(e) => handleInputChange('type', e.target.value)}
+                  className="border rounded px-3 py-2 w-full"
                 >
-                  <option value="">Select Area</option>
-                  {areasData &&
-                    areasData.map((area) => (
-                      <option key={area._id} value={area._id}>
-                        {area.name}
-                      </option>
-                    ))}
+                  <option value="single">Single Branch</option>
+                  <option value="multiple">Multiple Branches</option>
+                  <option value="all">All Branches</option>
                 </select>
               </div>
+
+              {/* New: Branch Selector (conditional on type) */}
+              {getFormValue('type') !== 'all' && (
+                <div className='mb-2'>
+                  <label className="block mb-1 font-medium">
+                    Select Branch{getFormValue('type') === 'multiple' ? 'es' : ''}
+                  </label>
+                  <Select
+                    isMulti={getFormValue('type') === 'multiple'}
+                    options={branchOptions}
+                    value={getCurrentBranchOptions()}
+                    onChange={handleBranchChange}
+                    placeholder={
+                      getFormValue('type') === 'single'
+                        ? 'Select a branch'
+                        : 'Select branches (search and click to add)'
+                    }
+                    className="basic-single"
+                    classNamePrefix="select"
+                    isSearchable={true}
+                    isClearable={true}
+                    isDisabled={!branches || branches.length === 0}
+                    styles={darkStyles}
+                  />
+                  {(getFormValue('branchIds') || []).length === 0 && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      {getFormValue('type') === 'single' ? 'No branch selected' : 'No branches selected'}
+                    </p>
+                  )}
+                </div>
+              )}
+              <hr className="my-2" />
+
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={getFormValue('isActive')}
+                  onChange={(e) => handleInputChange('isActive', e.target.checked)}
+                />
+                Active
+              </label>
+
               <button
                 type="submit"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition w-full"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition w-full mt-4"
               >
                 {modalType === 'add' ? 'Add' : 'Save'}
               </button>

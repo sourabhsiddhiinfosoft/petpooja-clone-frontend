@@ -1,20 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { ModalBox } from './ModalBox';
 import { logout } from '../store/slices/authSlice';
+import BranchSelector from './BranchSelector';
+import { useMeQuery } from '../store/api/authApi';
+import { useCurrentBranch } from '../store/hooks/useCurrentBranch';
 
-const DashboardLayout = ({ children, userType = 'admin' }) => {
+const DashboardLayout = ({ children, userType }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const pathname = usePathname();
-  const user = useSelector((state) => state.auth.user);
+  // const user = useSelector((state) => state.auth.user);
   const [modelActive, setModelActive] = useState(false);
+  // const { data: meData } = useMeQuery({skip: userType !== 'waiter' });
+  const { user} = useCurrentBranch();
 
-  console.log("user in layout==>", user);
+  
+  // useEffect(()=>{
+  // if(meData && Object.keys(meData).length > 0){
+  //     setUserData(meData);
+  // }
+  // },[meData,setUserData])
 
   const dispatch = useDispatch();
 
@@ -41,12 +51,16 @@ const DashboardLayout = ({ children, userType = 'admin' }) => {
       return [
         { name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
         { name: 'RESTAURANT', isHeader: true },
+        { name: 'Restaurant Details', href: `/${userType}/restaurant`, icon: '🏪' },
+        { name: 'Branches', href: `/${userType}/branches`, icon: '🏪' },
         { name: 'Profile', href: `/${userType}/profile`, icon: '🏷️' },
         { name: 'Categories', href: `/${userType}/categories`, icon: '🗂️' },
         { name: 'Menu Items', href: `/${userType}/menu-items`, icon: '🍽️' },
         { name: 'Tables', href: `/${userType}/tables`, icon: '🪑' },
         { name: 'Areas', href: `/${userType}/areas`, icon: '🗺️' },
         { name: 'ORDERS', isHeader: true },
+        // { name: 'Take Order', href: `/${userType}/takeOrder`, icon: '🧾' },
+        { name: 'Order Create', href: `/${userType}/orderFlowNew`, icon: '🧾' },
         { name: 'Orders', href: `/${userType}/orders`, icon: '🧾' },
         { name: 'STAFF', isHeader: true },
         { name: 'Staff', href: `/${userType}/staff`, icon: '👷' },
@@ -56,14 +70,29 @@ const DashboardLayout = ({ children, userType = 'admin' }) => {
       ];
     }
 
-    // staff
+    // staff waiter
+    if(userType === 'waiter'){
     return [
       { name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
       { name: 'SERVICE', isHeader: true },
+      { name: 'Take Order', href: `/${userType}/takeOrder`, icon: '🪑' },
+      {name:"Kots",href:`/${userType}/runningKOTs`,icon:'🧾'},
       { name: 'Assigned Tables', href: `/${userType}/assigned-tables`, icon: '🪑' },
       { name: 'Orders', href: `/${userType}/orders`, icon: '🧾' },
-      { name: 'Bills', href: `/${userType}/bills`, icon: '💵' },
+      // { name: 'Bills', href: `/${userType}/bills`, icon: '💵' },
     ];
+    }
+
+    if(userType === 'chef'){
+      return [
+      { name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
+      { name: 'KOTs', href: `/${userType}/runningKOTs`, icon: '🧾' },
+      ]
+    }
+
+    return[
+      {name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
+    ]
   };
 
   const navigationItems = getNavigationItems();
@@ -75,12 +104,12 @@ const DashboardLayout = ({ children, userType = 'admin' }) => {
     return pathname.startsWith(href);
   };
 
-  // let ProfileName = user && user?.name
-  // .split(" ")
-  // .map(word => word.charAt(0).toUpperCase())
-  // .join("");
+  let ProfileName = user && user?.name
+  .split(" ")
+  .map(word => word.charAt(0).toUpperCase())
+  .join("");
 
-  let ProfileName = userType && userType.split(" ").map(word => word.charAt(0).toUpperCase()).join("");
+  // let ProfileName = userType && userType.split(" ").map(word => word.charAt(0).toUpperCase()).join("");
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -147,13 +176,10 @@ const DashboardLayout = ({ children, userType = 'admin' }) => {
         </nav>
       </div>
 
-      {/* Main content */}
       <div className="lg:ml-64">
-        {/* Header */}
         <header className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-slate-200">
           <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              {/* Hamburger menu button */}
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="lg:hidden text-slate-600 hover:text-slate-900"
@@ -162,15 +188,11 @@ const DashboardLayout = ({ children, userType = 'admin' }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
+              <div className={`${userType != "owner" ? "hidden" : "" }`}>
 
-              {/* Branch selector 
-              <div className="hidden md:flex items-center gap-2">
-                <span className="text-sm text-slate-600">Branch</span>
-                <select className="text-sm font-medium text-slate-900 bg-transparent border-none outline-none">
-                  <option>Mumbai (Main)</option>
-                </select>
+                <BranchSelector className="w-64" />
               </div>
-              */}
+              
             </div>
 
             <div className="flex items-center gap-4">
