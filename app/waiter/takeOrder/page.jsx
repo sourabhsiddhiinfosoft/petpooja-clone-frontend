@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import {
   ChevronLeftIcon,
@@ -18,18 +18,12 @@ import DashboardLayout from '../../../components/DashboardLayout';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
 import { useCreateOrderMutation, useGetAreasWithTablesQuery, useGetCategoriesQuery, useGetKOTQuery, useGetMenuQuery, useUpdateTableMutation } from '../../../store/api/ownerApi';
 import { useCreateKOTMutation } from '../../../store/api/staffApi';
-import { type } from 'os';
 
 export default function OrderFlow() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { currentBranch, branches, user } = useCurrentBranch();
   const restaurantId = user?.restaurantId || '';
   const branchId = user?.branchId || '';
-
-  // Pre-load from URL (e.g., from tables page: ?tableId=xxx&step=3)
-  const initialTableId = searchParams.get('tableId') || '';
-  const initialStep = searchParams.get('step') || '1';
 
   const [step, setStep] = useState(initialStep === '3' ? 3 : 1);
   const [selectedTable, setSelectedTable] = useState(null);

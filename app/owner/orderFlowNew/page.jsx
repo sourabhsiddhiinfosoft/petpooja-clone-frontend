@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import {
   ChevronLeftIcon,
@@ -20,14 +20,9 @@ import { useCreateOrderMutation, useGetAreasWithTablesQuery, useGetCategoriesQue
 
 export default function OrderFlow() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { currentBranch, branches, user } = useCurrentBranch();
   const restaurantId = user?.restaurantId || '';
   const branchId = currentBranch?._id || '';
-
-  // Pre-load from URL (e.g., from tables page: ?tableId=xxx&step=3)
-  const initialTableId = searchParams.get('tableId') || '';
-  const initialStep = searchParams.get('step') || '1';
 
   const [step, setStep] = useState(initialStep === '3' ? 3 : 1);
   const [selectedTable, setSelectedTable] = useState(null);
@@ -44,20 +39,6 @@ export default function OrderFlow() {
   const [updateTable] = useUpdateTableMutation();
 
   const areasWithTables = awt?.data
-
-  // Pre-load for occupied table (fetch current order if tableId provided)
-  useEffect(() => {
-    if (areasWithTables && initialTableId && initialStep === '3') {
-      const table = areasWithTables?.flatMap(area => area.tables).find(t => t._id === initialTableId);
-      if (table) {
-        setSelectedTable(table);
-        // Assume fetch current order for this table (add useGetOrderByTableQuery if needed)
-        // For demo: Set dummy orderId and load cart from API
-        setOrderId(`order-${initialTableId}`);
-        toast.success('Loaded existing order for occupied table');
-      }
-    }
-  }, [initialTableId, initialStep, areasWithTables]);
 
   // Cart calculations
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0), [cart]);
