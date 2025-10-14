@@ -17,6 +17,7 @@ import {
 import DashboardLayout from '../../../components/DashboardLayout';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
 import { useCreateOrderMutation, useGetAreasWithTablesQuery, useGetCategoriesQuery, useGetKOTQuery, useGetMenuQuery, useUpdateTableMutation } from '../../../store/api/ownerApi';
+import { useCreateKOTMutation } from '../../../store/api/staffApi';
 
 export default function OrderFlow() {
   const router = useRouter();
@@ -24,25 +25,35 @@ export default function OrderFlow() {
   const restaurantId = user?.restaurantId || '';
   const branchId = currentBranch?._id || '';
 
-  const [step, setStep] = useState(initialStep === '3' ? 3 : 1);
+  const [step, setStep] = useState(1);
   const [selectedTable, setSelectedTable] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' for default
   const [cart, setCart] = useState([]); // { id, name, price, quantity, modifiers, subtotal }
   const [orderId, setOrderId] = useState(''); // For occupied table pre-load
+  const [currentOrder, setCurrentOrder] = useState(null); // For occupied table pre-load
 
   // APIs
   const { data: awt = [] } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
-  const { data: categories = [] } = useGetCategoriesQuery(`${restaurantId}&branchId=${branchId}`, { skip: !restaurantId });
+  const { data: categories = [] } = useGetCategoriesQuery(`${restaurantId}?branchId=${branchId}`, { skip: !restaurantId });
   const { data: menuItems = [] } = useGetMenuQuery(`${restaurantId}&branchId=${branchId}&categoryId=${selectedCategory === 'all' ? 0 : selectedCategory}`, { skip: !restaurantId && !selectedCategory });
   const { data: kotData } = useGetKOTQuery(orderId, { skip: !orderId });
   const [createOrder] = useCreateOrderMutation();
   const [updateTable] = useUpdateTableMutation();
+  const [createKot] = useCreateKOTMutation();
 
   const areasWithTables = awt?.data
 
+  useEffect(()=>{
+    if(selectedTable && selectedTable?.currentOrder){
+      if(selectedTable?.currentOrder?._id){
+        setOrderId(selectedTable?.currentOrder?._id);
+      }
+    }
+  },[selectedTable])
+
   // Cart calculations
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0), [cart]);
-  const tax = subtotal * 0.05; // 5% GST
+  const tax = subtotal * 0;
   const total = subtotal + tax;
 
   // Add to cart
@@ -82,6 +93,29 @@ export default function OrderFlow() {
   const nextStep = () => setStep(Math.min(step + 1, 3));
   const prevStep = () => setStep(Math.max(step - 1, 1));
 
+  const handleCreateKOT = async () => {
+    if (cart.length === 0) {  
+      return toast.error('Cart is empty');
+    }
+    if(!orderId){ 
+      return toast.error('Create order first to generate KOT');
+    }
+    try {
+      const kotPayload = {
+        orderId,
+        tableId: selectedTable._id,
+        items: cart.map(item => ({ ...item, modifiers: item.modifiers })),
+        total,
+      };
+      await createKot(kotPayload).unwrap();
+      toast.success('KOT created successfully!');
+      // Invalidate queries to refetch updated KOT
+      // (Assumes RTK Query tags like ['KOT'] are set)
+    } catch (error) {
+      toast.error('Failed to create KOT');
+    }
+  }
+
   // Create order and update table
   const handleCreateOrder = async () => {
     if (cart.length === 0) {
@@ -91,6 +125,7 @@ export default function OrderFlow() {
     try {
       const orderPayload = {
         restaurantId,
+        type: 'dine-in',
         branchId,
         tableId: selectedTable._id,
         items: cart.map(item => ({ ...item, modifiers: item.modifiers })),
@@ -98,6 +133,8 @@ export default function OrderFlow() {
         tax,
         total,
         status: 'pending',
+        orderBy:user._id,
+        orderByType:'User'
       };
       const response = await createOrder(orderPayload).unwrap();
       setOrderId(response._id);
@@ -111,7 +148,7 @@ export default function OrderFlow() {
       // (Assumes RTK Query tags like ['Tables'] are set)
 
       // Redirect to tables page
-      router.push('/owner/tables');
+      router.push('/owner/orderFlowNew');
     } catch (error) {
       toast.error('Failed to create order');
     }
@@ -140,8 +177,8 @@ export default function OrderFlow() {
   if (step === 1) {
     return (
       <DashboardLayout userType="owner">
-        <div className="min-h-screen bg-gray-50 py-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-gray-50" >
+          <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Header */}
             <div className="mb-8 flex items-center justify-between">
                 { step > 1 &&
@@ -306,7 +343,7 @@ export default function OrderFlow() {
               </div>
 
               {/* Right: Menus Grid */}
-              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6 xs:mb-6 lg:mb-0 h-[calc(100vh-200px)] overflow-y-auto">
                 <h3 className="font-semibold mb-4 text-gray-900 flex items-center gap-2">
                   <CheckCircleIcon className="h-5 w-5 text-green-600" />
                   Menu Items ({menuItems.length})
@@ -382,7 +419,7 @@ export default function OrderFlow() {
             {/* Sticky Cart Preview Bottom (Mobile + Desktop) */}
             {cart.length > 0 && (
               <div className="fixed bottom-0 left-0 right-0 lg:static lg:ml-0 bg-white border-t border-gray-200 lg:border-t-0 lg:rounded-xl lg:shadow-sm lg:mt-6 p-4 lg:p-0 lg:pt-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between lg:p-6">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
                       <span className="text-white font-bold">{cart.length}</span>
@@ -560,11 +597,7 @@ export default function OrderFlow() {
               {/* KOT Action Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <button
-                  onClick={() => {
-                    // Create new KOT (integrate with useCreateKOTMutation if available)
-                    toast.success('New KOT created for Table ' + selectedTable?.name);
-                    // Optionally: setOrderId(newKOTId);
-                  }}
+                  onClick={handleCreateKOT}
                   className="flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-3 rounded-lg font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all shadow-md"
                 >
                   <PrinterIcon className="h-5 w-5" />

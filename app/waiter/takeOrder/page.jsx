@@ -21,11 +21,11 @@ import { useCreateKOTMutation } from '../../../store/api/staffApi';
 
 export default function OrderFlow() {
   const router = useRouter();
-  const { currentBranch, branches, user } = useCurrentBranch();
+  const { user } = useCurrentBranch();
   const restaurantId = user?.restaurantId || '';
   const branchId = user?.branchId || '';
 
-  const [step, setStep] = useState(initialStep === '3' ? 3 : 1);
+  const [step, setStep] = useState(1);
   const [selectedTable, setSelectedTable] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' for default
   const [cart, setCart] = useState([]); // { id, name, price, quantity, modifiers, subtotal }
@@ -133,6 +133,8 @@ export default function OrderFlow() {
         tax,
         total,
         status: 'pending',
+        orderBy:user._id,
+        orderByType:'Staff'
       };
       const response = await createOrder(orderPayload).unwrap();
       setOrderId(response._id);

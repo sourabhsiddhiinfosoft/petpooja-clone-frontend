@@ -158,7 +158,7 @@ export default function OwnerKOTs() {
                           <div className="flex justify-between items-start">
                             <div>
                               <h3 className="font-bold text-gray-900 text-lg">KOT #{kot._id.slice(-6).toUpperCase()}</h3>
-                              <p className="text-sm text-gray-600">Table: {kot.tableNo || 'N/A'}</p>
+                              <p className="text-sm text-gray-600">Table: {kot?.tableNo || kot?.tableId?.name || 'N/A'}</p>
                             </div>
                             <StatusBadge status={kot.status} />
                           </div>
@@ -187,10 +187,10 @@ export default function OwnerKOTs() {
                               <ClockIcon className="h-4 w-4" />
                               <span>{new Date(kot.createdAt).toLocaleString()}</span>
                             </div>
-                            <div className="text-right">
+                            {/* <div className="text-right">
                               <p className="text-sm text-gray-600">Total:</p>
                               <p className="font-bold text-lg text-green-600">₹{kot.total?.toFixed(2) || '0.00'}</p>
-                            </div>
+                            </div> */}
                           </div>
                           {/* Action Button */}
                           <button

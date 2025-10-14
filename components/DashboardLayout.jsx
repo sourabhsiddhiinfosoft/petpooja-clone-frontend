@@ -77,7 +77,7 @@ const DashboardLayout = ({ children, userType }) => {
       { name: 'SERVICE', isHeader: true },
       { name: 'Take Order', href: `/${userType}/takeOrder`, icon: '🪑' },
       {name:"Kots",href:`/${userType}/runningKOTs`,icon:'🧾'},
-      { name: 'Assigned Tables', href: `/${userType}/assigned-tables`, icon: '🪑' },
+      { name: 'Running Tables', href: `/${userType}/runningTables`, icon: '🪑' },
       { name: 'Orders', href: `/${userType}/orders`, icon: '🧾' },
       // { name: 'Bills', href: `/${userType}/bills`, icon: '💵' },
     ];

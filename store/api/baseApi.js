@@ -13,7 +13,7 @@ export const baseApi = createApi({
       headers.set("Access-Control-Allow-Credentials", "true"); // Allow credentials
       const token = Cookies.get('token'); // Use your cookie name
       if (token) headers.set('authorization', `Bearer ${token}`);
-      headers.set('Content-Type', 'application/json');
+      // headers.set('Content-Type', 'application/json');
       return headers;
     },
     credentials: 'include',

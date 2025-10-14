@@ -98,6 +98,8 @@ export default function OwnerMenuItems() {
         branchIds: branchId ? [branchId] : [], // New: Pre-select current
         restaurantId,
         branchId,
+        imageFile: null,
+        previewUrl: '',
         // sku:""
       });
     } else {
@@ -147,59 +149,174 @@ export default function OwnerMenuItems() {
       toast.success('Menu item deleted successfully.');
       handleClose();
     } catch (error) {
-       if(error?.status == 400){
+      if (error?.status == 400) {
         toast.error(`Failed to delete menu item.  \n ${error?.data ? error?.data?.error : ""}`);
-      }else{
+      } else {
         toast.error(`Something went wrong`);
       }
     }
   };
 
-  // Updated handleUpdate (process branchIds and add type)
-  const handleUpdate = async () => {
-    if (!selectedItem?._id) return;
-    try {
-      const updatedItem = {
-        ...selectedItem,
-        restaurantId,
-        branchId,
-        categoryId: selectedItem.categoryId,
-        branchIds: selectedItem.type === 'all' ? [] : (selectedItem.branchIds || []), // New: Process branchIds
-      };
-      await updateMenuItem(updatedItem).unwrap();
-      toast.success('Menu item updated successfully.');
-      handleClose();
-    } catch (error) {
-       if(error?.status == 400){
-        toast.error(`Failed to update menu item.  \n ${error?.data ? error?.data?.error : ""}`);
-      }else{
-        toast.error(`Something went wrong`);
-      }
-    }
-  };
+// ✅ Updated handleUpdate (supports image upload + branch logic)
+const handleUpdate = async () => {
+  if (!selectedItem?._id) return;
 
-  // Updated handleCreate (process branchIds and add type)
+  try {
+    // 1️⃣ Prepare FormData (to support file uploads)
+    const formData = new FormData();
+
+    // 2️⃣ Add text fields
+    formData.append("restaurantId", restaurantId);
+    formData.append("branchId", branchId);
+    formData.append("categoryId", selectedItem.categoryId);
+    formData.append("type", selectedItem.type || "single");
+
+    // 3️⃣ Add branchIds (if multiple)
+    if (selectedItem.type === "all") {
+      // no need to append branchIds
+    } else if (Array.isArray(selectedItem.branchIds)) {
+      selectedItem.branchIds.forEach((id) => {
+        formData.append("branchIds[]", id);
+      });
+    }
+
+    // 4️⃣ Add all other fields except image
+    Object.keys(selectedItem).forEach((key) => {
+      if (
+        ![
+          "_id",
+          "image",
+          "branchIds",
+          "type",
+          "restaurantId",
+          "branchId",
+          "categoryId",
+        ].includes(key)
+      ) {
+        formData.append(key, selectedItem[key]);
+      }
+    });
+
+    // 5️⃣ Handle image file upload (if user selected new image)
+    if (selectedItem.imageFile) {
+      formData.append("image", selectedItem.imageFile); // must match multer field name
+    }
+
+    if(!formData && Object.keys(formData).length == 0){
+      return toast.error("No changes made to update.formdata is blank");
+    }
+
+    // 6️⃣ Call API
+    await updateMenuItem({ _id: selectedItem._id, formData }).unwrap();
+
+    toast.success("Menu item updated successfully.");
+    handleClose();
+  } catch (error) {
+    console.error("Update error:", error);
+    if (error?.status === 400) {
+      toast.error(
+        `Failed to update menu item.\n${error?.data?.error || ""}`
+      );
+    } else {
+      toast.error("Something went wrong");
+    }
+  }
+};
+
+
+  // // Updated handleUpdate (process branchIds and add type)
+  // const handleUpdate = async () => {
+  //   if (!selectedItem?._id) return;
+  //   try {
+  //     const updatedItem = {
+  //       ...selectedItem,
+  //       restaurantId,
+  //       branchId,
+  //       categoryId: selectedItem.categoryId,
+  //       branchIds: selectedItem.type === 'all' ? [] : (selectedItem.branchIds || []), // New: Process branchIds
+  //     };
+  //     await updateMenuItem(updatedItem).unwrap();
+  //     toast.success('Menu item updated successfully.');
+  //     handleClose();
+  //   } catch (error) {
+  //     if (error?.status == 400) {
+  //       toast.error(`Failed to update menu item.  \n ${error?.data ? error?.data?.error : ""}`);
+  //     } else {
+  //       toast.error(`Something went wrong`);
+  //     }
+  //   }
+  // };
+
+  //Upload with image
+
   const handleCreate = async () => {
     try {
-      const itemToCreate = {
-        ...newItem,
-        restaurantId,
-        branchId,
-        categoryId: newItem?.categoryId,
-        branchIds: newItem.type === 'all' ? [] : (newItem.branchIds || []), // New: Process branchIds
-      };
-      await createMenuItem(itemToCreate).unwrap();
-      toast.success('Menu item added successfully.');
+      const formData = new FormData();
+
+      formData.append("name", newItem.name);
+      formData.append("price", newItem.price);
+      formData.append("description", newItem.description || "");
+      formData.append("isAvailable", newItem.isAvailable ?? true);
+      formData.append("categoryId", newItem.categoryId);
+      formData.append("type", newItem.type || "single");
+      formData.append("restaurantId", restaurantId);
+
+      if (newItem.type === "multiple" && newItem.branchIds?.length) {
+        newItem.branchIds.forEach((id) => formData.append("branchIds[]", id));
+      } else {
+        formData.append("branchId", branchId);
+      }
+
+      // 🖼 Append file (image)
+      if (newItem.imageFile) {
+        formData.append("image", newItem.imageFile);
+      }
+
+      if(!formData && formData.keys().length == 0){
+        return toast.error("Form data is empty. Please fill in the details.");
+      }
+
+      console.log("Creating with formData:", formData);
+
+      await createMenuItem(formData).unwrap();
+      toast.success("Menu item added successfully.");
       handleClose();
     } catch (error) {
-      console.log(error)
-      if(error?.status == 400){
-        toast.error(`Failed to add menu item. \n ${error?.data ? error?.data?.error : ""}`);
-      }else{
-        toast.error(`Something went wrong`);
+      console.log(error);
+      if (error?.status === 400) {
+        toast.error(
+          `Failed to add menu item.\n ${error?.data ? error?.data?.error : ""}`
+        );
+      } else {
+        toast.error("Something went wrong.");
       }
     }
   };
+
+
+
+  // Updated handleCreate (process branchIds and add type)
+  // const handleCreate = async () => {
+  //   try {
+  //     const itemToCreate = {
+  //       ...newItem,
+  //       restaurantId,
+  //       branchId,
+  //       categoryId: newItem?.categoryId,
+  //       branchIds: newItem.type === 'all' ? [] : (newItem.branchIds || []), // New: Process branchIds
+  //     };
+  //     await createMenuItem(itemToCreate).unwrap();
+  //     toast.success('Menu item added successfully.');
+  //     handleClose();
+  //   } catch (error) {
+  //     console.log(error)
+  //     if (error?.status == 400) {
+  //       toast.error(`Failed to add menu item. \n ${error?.data ? error?.data?.error : ""}`);
+  //     } else {
+  //       toast.error(`Something went wrong`);
+  //     }
+  //   }
+  // };
 
   // Updated handleConfirm (add branch validation)
   const handleConfirm = async () => {
@@ -210,7 +327,7 @@ export default function OwnerMenuItems() {
         await handleDelete(selectedItem._id);
         return
       }
-    } 
+    }
 
     const currentCategory = modalType === 'add' ? newItem?.categoryId : selectedItem?.categoryId;
     if (!currentCategory) {
@@ -225,14 +342,14 @@ export default function OwnerMenuItems() {
       return;
     }
     // Rest of your existing logic...
-     if (modalType === 'edit') {
+    if (modalType === 'edit') {
       if (selectedItem && selectedItem._id) {
         await handleUpdate();
       }
     } else if (modalType === 'add') {
       await handleCreate();
     }
-    
+
   };
 
   // Update handleInputChange to handle type changes (reset branchIds on type change) - Updated
@@ -272,7 +389,9 @@ export default function OwnerMenuItems() {
   // Get current category option for React Select
   const getCurrentCategoryOption = () => {
     const currentCategoryId = getFormValue('categoryId');
-    return categoryOptions.find((opt) => opt.value === currentCategoryId) || null;
+    return categoryOptions.find((opt) => opt.value === (currentCategoryId?._id || currentCategoryId)) || null;
+    // return categoryOptions.find((opt) => opt.value === currentCategoryId) || selectedItem?.categoryId ? { value: selectedItem.categoryId._id, label: selectedItem.categoryId.name } : null;
+
   };
 
   // Get current branch options for React Select - New
@@ -302,35 +421,36 @@ export default function OwnerMenuItems() {
     }
   };
 
-  function getModelTitle(){
+  function getModelTitle() {
     return
   }
 
   return (
     <DashboardLayout userType="owner">
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Menu Items</h1>
-            <p className="text-gray-600">Create, update, delete and view items by category</p>
-          </div>
-          <div className='flex gap-4'>
-            <input
-              type="text"
-              placeholder="Search by name or category"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="border rounded-lg px-4 py-2 text-sm w-72 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            />
-            <button
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
-              onClick={() => handleOpen('add')}
-            >
-              + Add Menu Item
-            </button>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Menu Items</h1>
+              <p className="text-gray-600">Create, update, delete and view items by category</p>
+            </div>
+            <div className='flex gap-4'>
+              <input
+                type="text"
+                placeholder="Search by name or category"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="border rounded-lg px-4 py-2 text-sm w-72 shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+              <button
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
+                onClick={() => handleOpen('add')}
+              >
+                + Add Menu Item
+              </button>
+            </div>
           </div>
         </div>
-
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {isLoading && <TableLoading />}
           {isError && <p className="text-red-600 p-6">Failed to load menu items.</p>}
@@ -339,11 +459,13 @@ export default function OwnerMenuItems() {
               <table className="min-w-full text-sm text-gray-700">
                 <thead className="bg-gray-100 text-gray-800 sticky top-0">
                   <tr>
+                    <th className="p-3 text-left">No.</th>
+                    <th className="p-3 text-left">Menu Image</th>
                     <th className="p-3 text-left">Name</th>
                     <th className="p-3 text-left">Category</th>
                     <th className="p-3 text-left">Price</th>
                     <th className="p-3 text-left">Availability</th>
-                    <th className="p-3 text-left">Type</th>
+                    {/* <th className="p-3 text-left">Type</th> */}
                     <th className="p-3 text-left">Actions</th>
                   </tr>
                 </thead>
@@ -354,6 +476,14 @@ export default function OwnerMenuItems() {
                       className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                         } hover:bg-blue-50 transition`}
                     >
+                      <td className="p-3 font-medium">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                      <td className="p-3 w-44">
+                         <img
+                          src={item?.image || '/images/No-Image-Placeholder.png'}
+                          alt={`${item?.name}_img`}
+                          className="w-22 h-22 object-cover rounded border"
+                        />
+                        </td>
                       <td className="p-3 font-medium">{item.name}</td>
                       <td className="p-3">{item?.categoryId?.name || 'N/A'}</td>
                       <td className="p-3">₹{item.price}</td>
@@ -364,8 +494,8 @@ export default function OwnerMenuItems() {
                           <span className="text-gray-400">Unavailable</span>
                         )}
                       </td>
-                      <td className="p-3">{item?.tags ? String(item.tags) : 'N/A'}</td>
-                      <td className="p-3 flex gap-3">
+                      {/* <td className="p-3">{item?.tags ? String(item.tags) : 'N/A'}</td> */}
+                      <td className="p-3 flex items-center gap-3">
                         <button
                           title="Edit"
                           className="p-2 rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
@@ -394,7 +524,7 @@ export default function OwnerMenuItems() {
               </table>
             </div>
           )}
-                  {!isLoading && paginatedData?.length == 0 && (<div className='h-[200px] flex justify-center items-center w-full p-2 text-neutral-700'><div>Data not availabile</div></div>)}
+          {!isLoading && paginatedData?.length == 0 && (<div className='h-[200px] flex justify-center items-center w-full p-2 text-neutral-700'><div>Data not availabile</div></div>)}
 
           {/* Pagination */}
           <div className="flex justify-between items-center p-4 border-t bg-gray-50">
@@ -433,6 +563,16 @@ export default function OwnerMenuItems() {
               <p>
                 <b>Name:</b> {selectedItem?.name || 'N/A'}
               </p>
+              {selectedItem?.image && (
+                <div className="mt-2">
+                  <img
+                    src={selectedItem.image}
+                    alt={selectedItem.name}
+                    className="w-32 h-32 object-cover rounded border"
+                  />
+                </div>
+              )}
+
               <p>
                 <b>Category:</b> {selectedItem?.categoryId?.name || 'N/A'}
               </p>
@@ -475,6 +615,47 @@ export default function OwnerMenuItems() {
                   required
                 />
               </div>
+
+              <hr className="my-2" />
+
+              <div className="mb-2">
+                <label className="block mb-1 font-medium">Menu Item Image</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      const maxSizeKB = 100; // 👈 100 KB limit
+                      const maxSizeBytes = maxSizeKB * 1024;
+
+                      if (file.size > maxSizeBytes) {
+                        toast.error(`Image size must be less than ${maxSizeKB} KB`);
+                        return; // Stop processing
+                      }
+
+                      handleInputChange("imageFile", file);
+                      const reader = new FileReader();
+                      reader.onload = (ev) => handleInputChange("previewUrl", ev.target.result);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="border rounded px-3 py-2 w-full"
+                />
+
+
+                {/* Image preview */}
+                {getFormValue("previewUrl") && (
+                  <div className="mt-2">
+                    <img
+                      src={getFormValue("previewUrl")}
+                      alt="Preview"
+                      className="w-24 h-24 object-cover rounded border"
+                    />
+                  </div>
+                )}
+              </div>
+
               <hr className="my-2" />
 
               {/* <div className='mb-2'>
@@ -508,6 +689,44 @@ export default function OwnerMenuItems() {
                   <Link href="/owner/categories">Add Category</Link>
                 </p>
               </div>
+
+              <hr className="my-2" />
+
+              <div className='mb-2'>
+                <label className="block mb-1 font-medium">Price (₹)</label>
+                <input
+                  type="number"
+                  value={getFormValue('price')}
+                  onChange={(e) => handleInputChange('price', e.target.value)}
+                  placeholder="Price"
+                  className="border rounded px-3 py-2 w-full"
+                  required
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <hr className="my-2" />
+
+              <div className='mb-2'>
+                <label className="block mb-1 font-medium">Description</label>
+                <textarea
+                  value={getFormValue('description')}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  placeholder="Description"
+                  className="border rounded px-3 py-2 w-full"
+                  rows={3}
+                />
+              </div>
+
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={getFormValue('isAvailable')}
+                  onChange={(e) => handleInputChange('isAvailable', e.target.checked)}
+                />
+                Active
+              </label>
+
               <hr className="my-2" />
 
               {/* New: Apply To Type Select */}
@@ -554,42 +773,6 @@ export default function OwnerMenuItems() {
                   )}
                 </div>
               )}
-              <hr className="my-2" />
-
-              <div className='mb-2'>
-                <label className="block mb-1 font-medium">Price (₹)</label>
-                <input
-                  type="number"
-                  value={getFormValue('price')}
-                  onChange={(e) => handleInputChange('price', e.target.value)}
-                  placeholder="Price"
-                  className="border rounded px-3 py-2 w-full"
-                  required
-                  min="0"
-                  step="0.01"
-                />
-              </div>
-              <hr className="my-2" />
-
-              <div className='mb-2'>
-                <label className="block mb-1 font-medium">Description</label>
-                <textarea
-                  value={getFormValue('description')}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder="Description"
-                  className="border rounded px-3 py-2 w-full"
-                  rows={3}
-                />
-              </div>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={getFormValue('isAvailable')}
-                  onChange={(e) => handleInputChange('isAvailable', e.target.checked)}
-                />
-                Active
-              </label>
 
               <button
                 type="submit"

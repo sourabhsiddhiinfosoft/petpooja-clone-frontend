@@ -62,19 +62,11 @@ deleteTable: build.mutation({query: (_id) => ({ url: `/tables/${_id}`, method: '
     createOrder: build.mutation({ query: (body) => ({ url: '/orders', method: 'POST', body }), invalidatesTags: ['Orders', 'KOT'] }),
     getOrders: build.query({ query: () => ({ url: '/orders', method: 'GET' }), providesTags: ['Orders'] }),
     getOrderById: build.query({ query: (id) => ({ url: `/orders/${_id}`, method: 'GET' }), providesTags: (r, e, _id) => [{ type: 'Orders', _id }] }),
-    updateOrderStatus: build.mutation({ query: ({ _id, ...body }) => ({ url: `/orders/${_id}/status`, method: 'PUT', body }), invalidatesTags: (r, e, { id }) => [{ type: 'Orders', id }] }),
+    updateOrderStatus: build.mutation({ query: ({ id, ...body }) => ({ url: `/orders/${id}/status`, method: 'PUT', body }), invalidatesTags: (r, e, { id }) => [{ type: 'Orders', id }] }),
     addPayment: build.mutation({ query: ({ id, ...body }) => ({ url: `/orders/${id}/payments`, method: 'POST', body }), invalidatesTags: (r, e, { id }) => [{ type: 'Orders', id }] }),
     getKOT: build.query({ query: () => ({ url: '/kot', method: 'GET' }), providesTags: ['KOT'] }),
     // updateKOTStatus: build.mutation({ query: ({ _id, ...body }) => ({ url: `/kot/${_id}/status`, method: 'PUT', body }), invalidatesTags: (r, e, { _id }) => [{ type: 'KOT', _id }] }),
-   updateKOTStatus: build.mutation({
-  query: ({ kotId, ...body }) => ({  // Destructures _id for URL, ...body for payload
-    url: `/kots/${kotId}/status`, 
-    method: 'PUT', 
-    body,
-  }),
-  invalidatesTags: ['KOTs'],  // Assumes useGetKOTListQuery provides ['KOTs']
-  // Alternative: If you want ID-specific + list: invalidatesTags: (r, e, { _id }) => ['KOTs', { type: 'KOT', id: _id }]
-}),
+   updateKOTStatus: build.mutation({query: ({ kotId, ...body }) => ({url: `/kots/${kotId}/status`, method: 'PUT', body,}),invalidatesTags: ['KOTs'],}),
 
     getKOTList: build.query({ query: (q) => ({ url: `/kots?${q}`, method: 'GET' }), providesTags: ['KOT'] }),
 
