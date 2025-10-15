@@ -222,6 +222,7 @@ export default function OwnerOrders() {
                     <td className="p-3">{cat?.status}</td>
                     <td className="p-3 flex gap-3">
                       <button
+                      disabled={true}
                         title="Edit"
                         className="p-2 rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
                       onClick={() => handleOpen("edit", cat)}

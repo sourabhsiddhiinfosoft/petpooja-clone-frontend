@@ -39,11 +39,11 @@ export const ownerApi = baseApi.injectEndpoints({
     updateArea: build.mutation({ query: ({ _id, ...body }) => ({ url: `/areas/${_id}`, method: 'PUT', body }), invalidatesTags: ['Areas'], }),
     deleteArea: build.mutation({ query: (_id) => ({ url: `/areas/${_id}`, method: 'DELETE' }), invalidatesTags: ['Areas'], }),
 
-// Tables
-addTable: build.mutation({query: (body) => ({ url: '/tables', method: 'POST', body }),invalidatesTags: ['Tables'],}),
-getTables: build.query({query: (q) => ({url: `/tables/restaurant/${q}`,method: 'GET',}),providesTags: ['Tables'],}),
-updateTable: build.mutation({query: ({ _id, ...body }) => ({ url: `/tables/${_id}`, method: 'PUT', body }),invalidatesTags: ['Tables'],}),
-deleteTable: build.mutation({query: (_id) => ({ url: `/tables/${_id}`, method: 'DELETE' }),invalidatesTags: ['Tables'],}),
+    // Tables
+    addTable: build.mutation({ query: (body) => ({ url: '/tables', method: 'POST', body }), invalidatesTags: ['Tables'], }),
+    getTables: build.query({ query: (q) => ({ url: `/tables/restaurant/${q}`, method: 'GET', }), providesTags: ['Tables'], }),
+    updateTable: build.mutation({ query: ({ _id, ...body }) => ({ url: `/tables/${_id}`, method: 'PUT', body }), invalidatesTags: ['Tables'], }),
+    deleteTable: build.mutation({ query: (_id) => ({ url: `/tables/${_id}`, method: 'DELETE' }), invalidatesTags: ['Tables'], }),
 
     // Inventory
     addInventory: build.mutation({ query: (body) => ({ url: '/inventory', method: 'POST', body }), invalidatesTags: ['Inventory'] }),
@@ -64,10 +64,11 @@ deleteTable: build.mutation({query: (_id) => ({ url: `/tables/${_id}`, method: '
     getOrderById: build.query({ query: (id) => ({ url: `/orders/${_id}`, method: 'GET' }), providesTags: (r, e, _id) => [{ type: 'Orders', _id }] }),
     updateOrderStatus: build.mutation({ query: ({ id, ...body }) => ({ url: `/orders/${id}/status`, method: 'PUT', body }), invalidatesTags: (r, e, { id }) => [{ type: 'Orders', id }] }),
     addPayment: build.mutation({ query: ({ id, ...body }) => ({ url: `/orders/${id}/payments`, method: 'POST', body }), invalidatesTags: (r, e, { id }) => [{ type: 'Orders', id }] }),
-    getKOT: build.query({ query: () => ({ url: '/kot', method: 'GET' }), providesTags: ['KOT'] }),
-    // updateKOTStatus: build.mutation({ query: ({ _id, ...body }) => ({ url: `/kot/${_id}/status`, method: 'PUT', body }), invalidatesTags: (r, e, { _id }) => [{ type: 'KOT', _id }] }),
-   updateKOTStatus: build.mutation({query: ({ kotId, ...body }) => ({url: `/kots/${kotId}/status`, method: 'PUT', body,}),invalidatesTags: ['KOTs'],}),
+    updateOrder: build.mutation({ query: ({ orderId, body }) => ({ url: `/orders/${orderId}`, method: 'PUT', body, }), invalidatesTags: ['Orders', 'Tables', 'KOTs'], }),
 
+    //KOT
+    getKOT: build.query({ query: () => ({ url: '/kot', method: 'GET' }), providesTags: ['KOT'] }),
+    updateKOTStatus: build.mutation({ query: ({ kotId, ...body }) => ({ url: `/kots/${kotId}/status`, method: 'PUT', body, }), invalidatesTags: ['KOTs'], }),
     getKOTList: build.query({ query: (q) => ({ url: `/kots?${q}`, method: 'GET' }), providesTags: ['KOT'] }),
 
   }),

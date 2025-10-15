@@ -16,8 +16,8 @@ import {
 } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../../components/DashboardLayout';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
-import { useCreateOrderMutation, useGetAreasWithTablesQuery, useGetCategoriesQuery, useGetKOTQuery, useGetMenuQuery, useUpdateTableMutation } from '../../../store/api/ownerApi';
-import { useCreateKOTMutation } from '../../../store/api/staffApi';
+import { useCreateOrderMutation, useGetAreasWithTablesQuery, useUpdateOrderStatusMutation, useAddPaymentMutation, useGetCategoriesQuery, useGetMenuQuery, useUpdateTableMutation } from '../../../store/api/ownerApi';
+import { useCreateKOTMutation, useGetKOTQuery, useUpdateKOTStatusMutation } from '../../../store/api/staffApi';
 
 export default function OrderFlow() {
   const router = useRouter();
@@ -40,16 +40,39 @@ export default function OrderFlow() {
   const [createOrder] = useCreateOrderMutation();
   const [updateTable] = useUpdateTableMutation();
   const [createKot] = useCreateKOTMutation();
+  const [addPayment, { isLoading: isPaying }] = useAddPaymentMutation();
+  const [updateOrderStatus, { isLoading: isUpdatingStatus }] = useUpdateOrderStatusMutation();
+  const [updateKOTStatus] = useUpdateKOTStatusMutation();
 
   const areasWithTables = awt?.data
 
-  useEffect(()=>{
-    if(selectedTable && selectedTable?.currentOrder){
-      if(selectedTable?.currentOrder?._id){
-        setOrderId(selectedTable?.currentOrder?._id);
-      }
+  // Helper: preload cart from an existing order structure
+  const preloadCartFromOrder = (order) => {
+    if (!order || !Array.isArray(order.items)) return;
+    const preloaded = order.items.map((i) => {
+      const quantity = i.qty ?? i.quantity ?? 1;
+      return {
+        id: i.menuItem ?? i.id,
+        name: i.name,
+        price: i.price,
+        quantity,
+        subtotal: i.price * quantity,
+        modifiers: [],
+      };
+    });
+    setCart(preloaded);
+  };
+
+  useEffect(() => {
+    if (!selectedTable) return;
+    const order = selectedTable?.currentOrder;
+    if (order && order._id) {
+      setOrderId(order._id);
+      setCurrentOrder(order);
+      // preloadCartFromOrder(order);
+      setStep(3); // Jump straight to Cart when there is an existing order (occupied)
     }
-  },[selectedTable])
+  }, [selectedTable])
 
   // Cart calculations
   const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (item.price * item.quantity), 0), [cart]);
@@ -94,10 +117,10 @@ export default function OrderFlow() {
   const prevStep = () => setStep(Math.max(step - 1, 1));
 
   const handleCreateKOT = async () => {
-    if (cart.length === 0) {  
+    if (cart.length === 0) {
       return toast.error('Cart is empty');
     }
-    if(!orderId){ 
+    if (!orderId) {
       return toast.error('Create order first to generate KOT');
     }
     try {
@@ -122,19 +145,26 @@ export default function OrderFlow() {
       toast.error('Cart is empty');
       return;
     }
+    console.log("cart", cart)
     try {
       const orderPayload = {
         restaurantId,
         type: 'dine-in',
         branchId,
         tableId: selectedTable._id,
-        items: cart.map(item => ({ ...item, modifiers: item.modifiers })),
+        items: cart.map(item => ({
+          _id: item?._id,
+          name: item.name,
+          qty: item.quantity,
+          price: item.price,
+          modifiers: item.modifiers,
+        })),
         subtotal,
         tax,
         total,
         status: 'pending',
-        orderBy:user._id,
-        orderByType:'User'
+        orderBy: user._id,
+        orderByType: 'Staff'
       };
       const response = await createOrder(orderPayload).unwrap();
       setOrderId(response._id);
@@ -142,17 +172,31 @@ export default function OrderFlow() {
       // Update table status to occupied
       await updateTable({ _id: selectedTable._id, status: 'occupied' }).unwrap();
 
-      toast.success('Order created successfully! Redirecting to tables...');
-      
+      toast.success('Order created successfully!');
+
       // Invalidate queries to refetch updated tables
       // (Assumes RTK Query tags like ['Tables'] are set)
 
-      // Redirect to tables page
-      router.push('/owner/orderFlowNew');
+      // Stay in the same flow; jump to cart step to allow KOT/print
+      setStep(3);
     } catch (error) {
       toast.error('Failed to create order');
     }
   };
+
+   //handle update menu items on the order 
+    const handleUpdateOrder = async () => {
+      if (cart.length === 0) {
+        toast.error('Cart is empty');
+        return;
+      }
+      if(!orderId){
+        toast.error('No order to update');
+        return;
+      }
+   console.log("updating order",orderId);
+    }
+    
 
   // Print KOT (simple demo; integrate with print lib)
   const handlePrintKOT = () => {
@@ -173,21 +217,64 @@ export default function OrderFlow() {
     toast.success('KOT printed');
   };
 
+  // Cancel a KOT ticket
+  const handleCancelKOT = async (kotId) => {
+    if (!kotId) return;
+    try {
+      await updateKOTStatus({ id: kotId, status: 'cancelled' }).unwrap();
+      toast.success('KOT cancelled');
+    } catch (e) {
+      toast.error('Failed to cancel KOT');
+    }
+  };
+
+  // Take cash payment and complete order
+  const handleTakeCashPayment = async () => {
+    if (!orderId || !selectedTable) return toast.error('No order selected');
+    try {
+      await addPayment({ id: orderId, method: 'cash', amount: total, status: 'paid' }).unwrap();
+      await updateOrderStatus({ id: orderId, status: 'completed' }).unwrap();
+      await updateTable({ _id: selectedTable._id, status: 'free' }).unwrap();
+      toast.success('Payment recorded. Order completed. Table is now available.');
+      setCart([]);
+      setOrderId('');
+      setCurrentOrder(null);
+      setSelectedTable(null);
+      setStep(1);
+    } catch (e) {
+      toast.error('Payment failed to record');
+    }
+  };
+
+  const StatusBadge = ({ status }) => {
+    const colors = {
+      available: 'bg-green-100 text-green-800',
+      occupied: 'bg-red-100 text-red-800',
+      reserved: 'bg-yellow-100 text-yellow-800',
+      'out-of-service': 'bg-gray-100 text-gray-800',
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold capitalize ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+        {status}
+      </span>
+    );
+  };
+
   // Step 1: Table Selection
   if (step === 1) {
     return (
       <DashboardLayout userType="owner">
-        <div className="min-h-screen bg-gray-50" >
-          <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-gray-50 py-1" >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Header */}
-            <div className="mb-8 flex items-center justify-between">
-                { step > 1 &&
+            <div className="mb-4 flex items-center justify-between">
+              {step > 1 &&
                 <button onClick={() => router.back()} className="text-blue-600 hover:text-blue-800 flex items-center gap-2">
-                    <ChevronLeftIcon className="h-5 w-5" /> Back to Tables
+                  <ChevronLeftIcon className="h-5 w-5" /> Back to Tables
                 </button>
-                
-                }
-              <h1 className="text-3xl font-bold text-gray-900">Select Table</h1>
+
+              }
+              <h1 className="text-xl font-bold text-gray-900">Select Table</h1>
               <div className="w-32" /> {/* Spacer */}
             </div>
 
@@ -217,7 +304,7 @@ export default function OrderFlow() {
                 <div key={area._id} className="bg-white rounded-xl shadow-sm border border-gray-200">
                   <div
                     className="p-4 cursor-pointer hover:bg-gray-50 rounded-t-xl flex justify-between items-center"
-                    onClick={() => {}} // Collapsible if needed
+                    onClick={() => { }} // Collapsible if needed
                   >
                     <h2 className="text-xl font-semibold text-gray-900">{area.name}</h2>
                     <span className="text-sm text-gray-500">Tables: {area.tablesCount}</span>
@@ -228,15 +315,23 @@ export default function OrderFlow() {
                         key={table._id}
                         onClick={() => {
                           setSelectedTable(table);
-                          nextStep();
+                          // If table is occupied and has a current order, go to Cart directly
+                          if (table.status === 'occupied' && table.currentOrder && table.currentOrder._id) {
+                            setOrderId(table.currentOrder._id);
+                            setCurrentOrder(table.currentOrder);
+                            // preloadCartFromOrder(table.currentOrder);
+                            setStep(3);
+                          } else {
+                            // Fresh table flow → go to Menu selection
+                            setStep(2);
+                          }
                         }}
-                        className={`p-4 rounded-lg border-2 transition-all ${
-                          selectedTable?._id === table._id
+                        className={`p-4 rounded-lg border-2 transition-all ${selectedTable?._id === table._id
                             ? 'border-blue-500 bg-blue-50 shadow-md'
                             : table.status === 'occupied'
-                            ? 'border-red-500 bg-red-50 text-red-700'
-                            : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
-                        }`}
+                              ? 'border-red-500 bg-red-50 text-red-700'
+                              : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                          }`}
                         disabled={table.status === 'reserved'} // Optional
                       >
                         <div className="text-center">
@@ -298,7 +393,7 @@ export default function OrderFlow() {
                   <span>2. Menu</span>
                 </div>
                 <ChevronRightIcon className="h-5 w-5 text-gray-400" />
-                <div className={`flex items-center space-x-2 px-4 py-2 rounded-full ${step >= 3 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                <div onClick={() => { if ((currentOrder && currentOrder?._id)) { return setStep(3) } }} className={`flex items-center cursor-pointer space-x-2 px-4 py-2 rounded-full ${(step >= 3) || (currentOrder) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                   <CreditCardIcon className="h-5 w-5" />
                   <span>3. Cart</span>
                 </div>
@@ -316,11 +411,10 @@ export default function OrderFlow() {
                 <div className="space-y-2">
                   <button
                     onClick={() => setSelectedCategory('all')}
-                    className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${
-                      selectedCategory === 'all'
+                    className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${selectedCategory === 'all'
                         ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
                         : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
-                    }`}
+                      }`}
                   >
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                     All Items
@@ -329,11 +423,10 @@ export default function OrderFlow() {
                     <button
                       key={cat._id}
                       onClick={() => setSelectedCategory(cat._id)}
-                      className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${
-                        selectedCategory === cat._id
+                      className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${selectedCategory === cat._id
                           ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
                           : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
-                      }`}
+                        }`}
                     >
                       <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                       {cat.name}
@@ -348,20 +441,20 @@ export default function OrderFlow() {
                   <CheckCircleIcon className="h-5 w-5 text-green-600" />
                   Menu Items ({menuItems.length})
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4  gap-4">
                   {menuItems.map((item) => {
                     const cartItem = cart.find(c => c.id === item._id);
                     return (
                       <div key={item._id} className="bg-gray-50 rounded-lg p-4 hover:shadow-md transition-all border border-gray-100">
                         <img
-                          src={item.imageUrl || '/placeholder-menu.jpg'}
+                          src={item.imageUrl || '/images/No-Image-Placeholder.png'}
                           alt={item.name}
                           className="w-full h-32 object-cover rounded-lg mb-2"
                         />
                         <h4 className="font-medium text-gray-900 mb-1">{item.name}</h4>
                         <p className="text-sm text-gray-600 mb-2">{item.description || 'Delicious item'}</p>
                         <p className="text-lg font-bold text-green-600 mb-3">₹{item.price}</p>
-                        
+
                         {/* Quantity Controls if in Cart */}
                         {cartItem ? (
                           <div className="flex items-center justify-center gap-2 bg-white rounded-lg p-2 border">
@@ -446,7 +539,7 @@ export default function OrderFlow() {
     );
   }
 
-    // Step 3: Cart & KOT Management
+  // Step 3: Cart & KOT Management
   if (step === 3) {
     return (
       <DashboardLayout userType="owner">
@@ -506,21 +599,78 @@ export default function OrderFlow() {
               </div>
             )}
 
-            {/* Cart Items List */}
+            {/* Existing Order Section (if preloaded) */}
+            {currentOrder && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                <h3 className="font-semibold text-gray-900 mb-4">Existing Order</h3>
+                <div className="text-sm text-gray-600 mb-4">
+                  <div>Order ID: <span className="font-medium text-gray-900">{orderId}</span></div>
+                  <div>Status: <span className="font-medium capitalize">{currentOrder.status}</span></div>
+                  <div>Created: {new Date(currentOrder.createdAt).toLocaleString()}</div>
+                </div>
+                <ul className="divide-y">
+                  {(currentOrder.items || []).map((i, idx) => (
+                    <li key={idx} className="py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gray-100 rounded-lg" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{i.name}</div>
+                          <div className="text-xs text-gray-500">Qty: {i.qty} • ₹{i.price}</div>
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">₹{(i.price * i.qty).toFixed(2)}</div>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* KOT List & Cancel */}
+                {Array.isArray(currentOrder.kotIds) && currentOrder.kotIds.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-medium text-gray-900 mb-2">KOTs</h4>
+                    <div className="space-y-2">
+                      {currentOrder.kotIds.map((k) => (
+                        <div key={k} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-3">
+                          <div className="text-sm">KOT: {k}</div>
+                          <button
+                            onClick={() => handleCancelKOT(k)}
+                            className="text-red-600 hover:text-red-700 text-sm"
+                          >
+                            Cancel KOT
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={handleTakeCashPayment}
+                    disabled={isPaying || isUpdatingStatus}
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed col-span-1 sm:col-span-2 lg:col-span-1"
+                  >
+                    <CreditCardIcon className="h-5 w-5" />
+                    Take Cash & Complete
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Cart Items List (Add more) */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <CreditCardIcon className="h-5 w-5 text-green-600" />
-                Cart Items ({cart.length})
+                {currentOrder ? 'Add More Items' : `Cart Items (${cart.length})`}
               </h3>
               {cart.length === 0 ? (
                 <div className="text-center py-8">
                   <TrashIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">Your cart is empty. Add items from the menu.</p>
+                  <p className="text-gray-500">{currentOrder ? 'Cart empty. Add more from menu.' : 'Your cart is empty. Add items from the menu.'}</p>
                   <button
-                    onClick={prevStep}
+                    onClick={() => setStep(2)}
                     className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
                   >
-                    Add Items
+                    Go to Menu
                   </button>
                 </div>
               ) : (
@@ -529,7 +679,7 @@ export default function OrderFlow() {
                     <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition">
                       <div className="flex items-center gap-3 flex-1">
                         <img
-                          src={item.imageUrl || '/placeholder-menu.jpg'}
+                          src={item.imageUrl || '/images/No-Image-Placeholder.png'}
                           alt={item.name}
                           className="w-16 h-16 object-cover rounded-lg"
                         />
@@ -594,7 +744,7 @@ export default function OrderFlow() {
                 </div>
               </div>
 
-              {/* KOT Action Buttons */}
+              {/* KOT / Payment Action Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <button
                   onClick={handleCreateKOT}
@@ -611,14 +761,15 @@ export default function OrderFlow() {
                   <PrinterIcon className="h-5 w-5" />
                   Print KOT
                 </button>
+                
                 <button
-                  onClick={handleCreateOrder}
+                  onClick={()=>orderId ? handleUpdateOrder() : handleCreateOrder()}
                   disabled={cart.length === 0 || !selectedTable}
-                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed col-span-1 sm:col-span-2 lg:col-span-1"
+                  className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 flex-1 ml-4"
                 >
-                  <CreditCardIcon className="h-5 w-5" />
-                  {orderId ? 'Update Order' : 'Create Order & Proceed to Payment'}
+                    {orderId ? 'Update Order' : 'Create Order'}
                 </button>
+              
               </div>
 
               {/* KOT Preview (if order exists) */}
@@ -630,20 +781,7 @@ export default function OrderFlow() {
               )}
             </div>
 
-            {/* No Cart Warning */}
-            {cart.length === 0 && (
-              <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-gray-200">
-                <CreditCardIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No items in cart</h3>
-                <p className="text-gray-500 mb-4">Add menu items to proceed.</p>
-                <button
-                  onClick={prevStep}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition"
-                >
-                  Go to Menu
-                </button>
-              </div>
-            )}
+
           </div>
 
           {/* Fixed Bottom Bar (Mobile Responsive) */}
@@ -656,12 +794,12 @@ export default function OrderFlow() {
                   </div>
                   <span className="font-semibold text-gray-900">Total: ₹{total.toFixed(2)}</span>
                 </div>
-                <button
-                  onClick={handleCreateOrder}
+                 <button
+                  onClick={()=>orderId ? handleUpdateOrder() : handleCreateOrder()}
                   disabled={cart.length === 0 || !selectedTable}
                   className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 flex-1 ml-4"
                 >
-                  Create Order
+                    {orderId ? 'Update Order' : 'Create Order'}
                 </button>
               </div>
             </div>
