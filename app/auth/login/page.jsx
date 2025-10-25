@@ -6,6 +6,7 @@ import styles from "../../../styles/login.module.css";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
 import { setCredentials } from "../../../store/slices/authSlice";
+import { LoadingSpinner } from "../../../components/Loading/loadingSpinner";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -80,6 +81,18 @@ export default function LoginPage() {
     setPassword("admin@123");
   }
 
+  const handleSetOwner = () => {
+    setEmail("owner@foodplaza.com")
+    setPassword("secure123")
+  }
+  const handleSetWaiter = () => {
+    setEmail("waiter@one.com")
+    setPassword("123456")
+  }
+  const handleSetChef = () => {
+    setEmail("chef@one.com")
+    setPassword("123456")
+  }
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-slate-100 flex items-stretch justify-center">
@@ -175,34 +188,12 @@ export default function LoginPage() {
               <a href="#" className="text-cyan-400 hover:text-cyan-300">Forgot password?</a>
             </div>
 
-            <button type="submit" disabled={loading} className="mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 py-3 font-medium text-white shadow-lg shadow-cyan-500/20 hover:opacity-95 transition">
-
-              {
-              // loading ? (
-              //   <svg
-              //     className="absolute left-3 h-5 w-5 animate-spin text-white"
-              //     xmlns="http://www.w3.org/2000/svg"
-              //     fill="none"
-              //     viewBox="0 0 24 24"
-              //   >
-              //     <circle
-              //       className="opacity-25"
-              //       cx="12"
-              //       cy="12"
-              //       r="10"
-              //       stroke="currentColor"
-              //       strokeWidth="4"
-              //     ></circle>
-              //     <path
-              //       className="opacity-75"
-              //       fill="currentColor"
-              //       d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 100 16 8 8 0 01-8-8z"
-              //     ></path>
-              //   </svg>)
-              //   : "Sign in"
-              }
-Sign in
+            <button type="submit" disabled={loading} className={`mt-6 w-full rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 py-3 font-medium text-white shadow-lg shadow-cyan-500/20 transition ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:opacity-95'}`}>
+              {loading ?
+                  <LoadingSpinner />
+               : 'Sign in'}
             </button>
+            
             {/*
             <div className="mt-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-white/10" />
@@ -220,9 +211,20 @@ Sign in
             </p>
             */}
             <p className="mt-6 text-center text-sm text-slate-300 cursor-copy" onClick={() => handleSetEP()}>
-              For testing you can use <br />
-              <span className="font-mono">Email : admin@gmail.com</span> <br />
-              <span className="font-mono">Password : admin@123</span>
+              For testing - Click on where you go<br />
+              <span className="font-mono">As Super Admin </span>
+            </p>
+              <p className="mt-2 text-center text-sm text-slate-300 cursor-copy" onClick={() => handleSetOwner()}>
+             
+              <span className="font-mono">As Owner</span>
+            </p>
+            <p className="mt-2 text-center text-sm text-slate-300 cursor-copy" onClick={() => handleSetWaiter()}>
+             
+              <span className="font-mono">As Waiter</span>
+            </p>
+             <p className="mt-2 text-center text-sm text-slate-300 cursor-copy" onClick={() => handleSetChef()}>
+             
+              <span className="font-mono">As Chef</span>
             </p>
           </form>
         </div>

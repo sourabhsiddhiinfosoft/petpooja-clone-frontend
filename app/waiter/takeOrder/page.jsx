@@ -16,7 +16,7 @@ import {
 } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../../components/DashboardLayout';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
-import { useCreateOrderMutation, useGetAreasWithTablesQuery,useUpdateOrderStatusMutation,useAddPaymentMutation, useGetCategoriesQuery, useGetMenuQuery, useUpdateTableMutation } from '../../../store/api/ownerApi';
+import { useCreateOrderMutation, useGetAreasWithTablesQuery, useUpdateOrderStatusMutation, useAddPaymentMutation, useGetCategoriesQuery, useGetMenuQuery, useUpdateTableMutation, useUpdateOrderMutation } from '../../../store/api/ownerApi';
 import { useCreateKOTMutation, useGetKOTQuery, useUpdateKOTStatusMutation } from '../../../store/api/staffApi';
 
 export default function OrderFlow() {
@@ -33,16 +33,17 @@ export default function OrderFlow() {
   const [currentOrder, setCurrentOrder] = useState(null); // For occupied table pre-load
 
   // APIs
-  const { data: awt = [] } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
+  const { data: awt = [], isLoading: isLoadingTables } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
   const { data: categories = [] } = useGetCategoriesQuery(`${restaurantId}?branchId=${branchId}`, { skip: !restaurantId });
-  const { data: menuItems = [] } = useGetMenuQuery(`${restaurantId}&branchId=${branchId}&categoryId=${selectedCategory === 'all' ? 0 : selectedCategory}`, { skip: !restaurantId && !selectedCategory });
+  const { data: menuItems = [], isLoading: isLoadingMenu } = useGetMenuQuery(`${restaurantId}&branchId=${branchId}&categoryId=${selectedCategory === 'all' ? 0 : selectedCategory}`, { skip: !restaurantId && !selectedCategory });
   const { data: kotData } = useGetKOTQuery(orderId, { skip: !orderId });
-  const [createOrder] = useCreateOrderMutation();
+  const [createOrder, { isLoading: isCreatingOrder }] = useCreateOrderMutation();
   const [updateTable] = useUpdateTableMutation();
-  const [createKot] = useCreateKOTMutation();
+  const [createKot, { isLoading: isCreatingKOT }] = useCreateKOTMutation();
   const [addPayment, { isLoading: isPaying }] = useAddPaymentMutation();
   const [updateOrderStatus, { isLoading: isUpdatingStatus }] = useUpdateOrderStatusMutation();
   const [updateKOTStatus] = useUpdateKOTStatusMutation();
+  const [updateOrder, { isLoading: isUpdatingOrder }] = useUpdateOrderMutation();
 
   const areasWithTables = awt?.data
 
@@ -61,6 +62,106 @@ export default function OrderFlow() {
       };
     });
     setCart(preloaded);
+  };
+
+  // Print full customer bill (receipt)
+  const handlePrintBill = () => {
+    if (!orderId) return toast.error('No order to print');
+    const billItems = (currentOrder?.items && currentOrder.items.length > 0) ? currentOrder.items : cart.map(c => ({ name: c.name, qty: c.quantity, price: c.price }));
+    if (!billItems || billItems.length === 0) return toast.error('No items to print');
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString();
+    const formattedTime = now.toLocaleTimeString();
+    const cashierName = user?.name || user?.email || 'Cashier';
+    const billNo = orderId?.slice(-6).toUpperCase();
+
+    const subtotalStr = subtotal.toFixed(2);
+    const cgst = (tax / 2).toFixed(2);
+    const sgst = (tax / 2).toFixed(2);
+    const totalStr = selectedTable?.currentOrder?.total.toFixed(2);
+
+    const rowsHtml = billItems
+      .map(i => {
+        const lineTotal = (i.price * i.qty).toFixed(2);
+        return `
+          <tr>
+            <td class="text">${i.name}</td>
+            <td class="num">${i.qty}</td>
+            <td class="num">${Number(i.price).toFixed(2)}</td>
+            <td class="num">${lineTotal}</td>
+          </tr>`;
+      })
+      .join('');
+
+    const html = `
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Bill #${billNo}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; }
+          .receipt { width: 280px; padding: 10px 12px; }
+          .center { text-align: center; }
+          .muted { color: #555; font-size: 11px; }
+          hr { border: 0; border-top: 1px dashed #ccc; margin: 8px 0; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { font-size: 12px; padding: 4px 0; }
+          th { text-align: left; border-bottom: 1px solid #000; }
+          .num { text-align: right; }
+          .text { max-width: 140px; }
+          .title { font-weight: 700; font-size: 13px; }
+          .total { font-weight: 700; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="center title">Test Header</div>
+          <div class="muted" style="margin-top:6px">
+            Name: <br/>
+            Date: ${formattedDate} ${formattedTime}<br/>
+            Cashier: ${cashierName} &nbsp;&nbsp; Bill No.: ${billNo}
+          </div>
+          <hr/>
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="num">Qty</th>
+                <th class="num">Price</th>
+                <th class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+          <hr/>
+          <table>
+            <tbody>
+              <tr><td>Total Qty:</td><td class="num" colspan="3">${billItems.reduce((s, i) => s + Number(i.qty), 0)}</td></tr>
+              <tr><td>Sub Total</td><td class="num" colspan="3">${subtotalStr}</td></tr>
+              <tr><td>CGST</td><td class="num" colspan="3">${cgst}</td></tr>
+              <tr><td>SGST</td><td class="num" colspan="3">${sgst}</td></tr>
+            </tbody>
+          </table>
+          <hr/>
+          <div class="total">Grand Total  ₹ ${totalStr}</div>
+          <hr/>
+          <div class="center muted">Test Footer</div>
+        </div>
+        <script>
+          window.onload = function(){ window.print(); setTimeout(()=>window.close(), 300); };
+        </script>
+      </body>
+      </html>
+    `;
+
+    const w = window.open('', '_blank', 'width=360,height=600');
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   };
 
   useEffect(() => {
@@ -117,10 +218,10 @@ export default function OrderFlow() {
   const prevStep = () => setStep(Math.max(step - 1, 1));
 
   const handleCreateKOT = async () => {
-    if (cart.length === 0) {  
+    if (cart.length === 0) {
       return toast.error('Cart is empty');
     }
-    if(!orderId){ 
+    if (!orderId) {
       return toast.error('Create order first to generate KOT');
     }
     try {
@@ -162,36 +263,62 @@ export default function OrderFlow() {
         tax,
         total,
         status: 'pending',
-        orderBy:user._id,
-        orderByType:'Staff'
+        orderBy: user._id,
+        orderByType: 'Staff'
       };
       const response = await createOrder(orderPayload).unwrap();
       setOrderId(response._id);
 
+      // Update table status to occupied
+      await updateTable({ _id: selectedTable._id, status: 'occupied' }).unwrap();
+
       toast.success('Order created successfully!');
-      
+
       // Invalidate queries to refetch updated tables
       // (Assumes RTK Query tags like ['Tables'] are set)
 
+      setCart([])
       // Stay in the same flow; jump to cart step to allow KOT/print
-      setStep(3);
+      // setStep(3);
+         window.refresh();
     } catch (error) {
       toast.error('Failed to create order');
     }
   };
 
-  //handle update the order
+  //handle update menu items on the order 
   const handleUpdateOrder = async () => {
     if (cart.length === 0) {
       toast.error('Cart is empty');
       return;
     }
-    if(!orderId){
+    if (!orderId) {
       toast.error('No order to update');
       return;
     }
- console.log("updating order",orderId);
+    try {
+      const body = {
+        items: cart.map(item => ({
+          _id: item?._id,
+          name: item.name,
+          qty: item.quantity,
+          price: item.price,
+          modifiers: item.modifiers,
+        })),
+        subtotal,
+        tax,
+        total,
+      };
+      const updated = await updateOrder({ orderId, body }).unwrap();
+      // Optionally sync local current order state
+      setCurrentOrder(prev => ({ ...(prev || {}), ...(updated || {}), items: body.items, subtotal: body.subtotal, tax: body.tax, total: body.total }));
+      toast.success('Order updated successfully');
+         window.refresh();
+    } catch (error) {
+      toast.error('Failed to update order');
+    }
   }
+
 
   // Print KOT (simple demo; integrate with print lib)
   const handlePrintKOT = () => {
@@ -227,7 +354,7 @@ export default function OrderFlow() {
   const handleTakeCashPayment = async () => {
     if (!orderId || !selectedTable) return toast.error('No order selected');
     try {
-      await addPayment({ id: orderId, method: 'cash', amount: total, status: 'paid' }).unwrap();
+      await addPayment({ id: orderId, method: 'cash', amount: currentOrder?.total, status: 'paid' }).unwrap();
       await updateOrderStatus({ id: orderId, status: 'completed' }).unwrap();
       await updateTable({ _id: selectedTable._id, status: 'available' }).unwrap();
       toast.success('Payment recorded. Order completed. Table is now available.');
@@ -235,13 +362,36 @@ export default function OrderFlow() {
       setOrderId('');
       setCurrentOrder(null);
       setSelectedTable(null);
-      // setStep(1);
-      router.refresh(); // Refresh to update table status
-
+      setStep(1);
+      window.refresh();
     } catch (e) {
       toast.error('Payment failed to record');
     }
   };
+
+  const StatusBadge = ({ status }) => {
+    const colors = {
+      available: 'bg-green-100 text-green-800',
+      occupied: 'bg-red-100 text-red-800',
+      reserved: 'bg-yellow-100 text-yellow-800',
+      'out-of-service': 'bg-gray-100 text-gray-800',
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold capitalize ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+        {status}
+      </span>
+    );
+  };
+
+  const existingOrderDate = (createdAt) => {
+    const date = new Date(createdAt);
+    const year = date.toLocaleString('en-US', { year: 'numeric' });
+    const month = date.toLocaleString('en-US', { month: 'short' });
+    const day = date.toLocaleString('en-US', { day: '2-digit' });
+
+    const customFormattedDate = `${day}-${month}-${year}`;
+    return customFormattedDate;
+  }
 
   // Step 1: Table Selection
   if (step === 1) {
@@ -251,12 +401,12 @@ export default function OrderFlow() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Header */}
             <div className="mb-4 flex items-center justify-between">
-                { step > 1 &&
+              {step > 1 &&
                 <button onClick={() => router.back()} className="text-blue-600 hover:text-blue-800 flex items-center gap-2">
-                    <ChevronLeftIcon className="h-5 w-5" /> Back to Tables
+                  <ChevronLeftIcon className="h-5 w-5" /> Back to Tables
                 </button>
-                
-                }
+
+              }
               <h1 className="text-xl font-bold text-gray-900">Select Table</h1>
               <div className="w-32" /> {/* Spacer */}
             </div>
@@ -274,7 +424,7 @@ export default function OrderFlow() {
                   <span>2. Menu</span>
                 </div>
                 <ChevronRightIcon className="h-5 w-5 text-gray-400" />
-                  <div onClick={()=>{if((currentOrder && currentOrder?._id)){return setStep(3)}}} className={`flex items-center cursor-pointer space-x-2 px-4 py-2 rounded-full ${(step >= 3) || (currentOrder) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                <div className={`flex items-center space-x-2 px-4 py-2 rounded-full ${step >= 3 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                   <CreditCardIcon className="h-5 w-5" />
                   <span>3. Cart</span>
                 </div>
@@ -283,11 +433,31 @@ export default function OrderFlow() {
 
             {/* Areas & Tables */}
             <div className="space-y-6">
+              {isLoadingTables && (
+                <div key={"loading-carddd"} className="bg-white rounded-xl shadow-sm border border-gray-200">
+                 <div
+                    className="p-4 cursor-pointer hover:bg-gray-50 rounded-t-xl flex justify-between items-center"
+                  
+                  >
+                    <h2 className="text-xl font-semibold text-gray-900">Loading areas...</h2>
+                    <span className="text-sm text-gray-500">Tables: --</span>
+                  </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4">
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <div key={idx} className="p-4 rounded-lg border-2 bg-gray-50 animate-pulse">
+                      <div className="w-12 h-12 mx-auto mb-2 bg-gray-200 rounded-full" />
+                      <div className="h-3 bg-gray-200 rounded w-16 mx-auto mb-1" />
+                      <div className="h-2 bg-gray-200 rounded w-10 mx-auto" />
+                    </div>
+                  ))}
+                </div>
+                </div>
+              )}
               {areasWithTables && areasWithTables?.map((area) => (
                 <div key={area._id} className="bg-white rounded-xl shadow-sm border border-gray-200">
                   <div
                     className="p-4 cursor-pointer hover:bg-gray-50 rounded-t-xl flex justify-between items-center"
-                    onClick={() => {}} // Collapsible if needed
+                    onClick={() => { }} // Collapsible if needed
                   >
                     <h2 className="text-xl font-semibold text-gray-900">{area.name}</h2>
                     <span className="text-sm text-gray-500">Tables: {area.tablesCount}</span>
@@ -296,7 +466,7 @@ export default function OrderFlow() {
                     {area.tables.map((table) => (
                       <button
                         key={table._id}
-                    onClick={() => {
+                        onClick={() => {
                           setSelectedTable(table);
                           // If table is occupied and has a current order, go to Cart directly
                           if (table.status === 'occupied' && table.currentOrder && table.currentOrder._id) {
@@ -309,13 +479,12 @@ export default function OrderFlow() {
                             setStep(2);
                           }
                         }}
-                        className={`p-4 rounded-lg border-2 transition-all ${
-                          selectedTable?._id === table._id
-                            ? 'border-blue-500 bg-blue-50 shadow-md'
-                            : table.status === 'occupied'
+                        className={`p-4 rounded-lg border-2 transition-all ${selectedTable?._id === table._id
+                          ? 'border-blue-500 bg-blue-50 shadow-md'
+                          : table.status === 'occupied'
                             ? 'border-red-500 bg-red-50 text-red-700'
                             : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
-                        }`}
+                          }`}
                         disabled={table.status === 'reserved'} // Optional
                       >
                         <div className="text-center">
@@ -377,7 +546,7 @@ export default function OrderFlow() {
                   <span>2. Menu</span>
                 </div>
                 <ChevronRightIcon className="h-5 w-5 text-gray-400" />
-                <div className={`flex items-center space-x-2 px-4 py-2 rounded-full ${step >= 3 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                <div onClick={() => { if ((currentOrder && currentOrder?._id)) { return setStep(3) } }} className={`flex items-center cursor-pointer space-x-2 px-4 py-2 rounded-full ${(step >= 3) || (currentOrder) ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                   <CreditCardIcon className="h-5 w-5" />
                   <span>3. Cart</span>
                 </div>
@@ -395,11 +564,10 @@ export default function OrderFlow() {
                 <div className="space-y-2">
                   <button
                     onClick={() => setSelectedCategory('all')}
-                    className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${
-                      selectedCategory === 'all'
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                        : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
-                    }`}
+                    className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${selectedCategory === 'all'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                      : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
+                      }`}
                   >
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                     All Items
@@ -408,11 +576,10 @@ export default function OrderFlow() {
                     <button
                       key={cat._id}
                       onClick={() => setSelectedCategory(cat._id)}
-                      className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${
-                        selectedCategory === cat._id
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                          : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
-                      }`}
+                      className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${selectedCategory === cat._id
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                        : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
+                        }`}
                     >
                       <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                       {cat.name}
@@ -427,7 +594,19 @@ export default function OrderFlow() {
                   <CheckCircleIcon className="h-5 w-5 text-green-600" />
                   Menu Items ({menuItems.length})
                 </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {isLoadingMenu && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+                    {Array.from({ length: 8 }).map((_, idx) => (
+                      <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-100 animate-pulse">
+                        <div className="w-full h-32 bg-gray-200 rounded-lg mb-2" />
+                        <div className="h-3 bg-gray-200 rounded w-24 mb-2" />
+                        <div className="h-2 bg-gray-200 rounded w-32 mb-2" />
+                        <div className="h-4 bg-gray-200 rounded w-20" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4  gap-4">
                   {menuItems.map((item) => {
                     const cartItem = cart.find(c => c.id === item._id);
                     return (
@@ -440,7 +619,7 @@ export default function OrderFlow() {
                         <h4 className="font-medium text-gray-900 mb-1">{item.name}</h4>
                         <p className="text-sm text-gray-600 mb-2">{item.description || 'Delicious item'}</p>
                         <p className="text-lg font-bold text-green-600 mb-3">₹{item.price}</p>
-                        
+
                         {/* Quantity Controls if in Cart */}
                         {cartItem ? (
                           <div className="flex items-center justify-center gap-2 bg-white rounded-lg p-2 border">
@@ -525,7 +704,7 @@ export default function OrderFlow() {
     );
   }
 
-    // Step 3: Cart & KOT Management
+  // Step 3: Cart & KOT Management
   if (step === 3) {
     return (
       <DashboardLayout userType="waiter">
@@ -592,7 +771,8 @@ export default function OrderFlow() {
                 <div className="text-sm text-gray-600 mb-4">
                   <div>Order ID: <span className="font-medium text-gray-900">{orderId}</span></div>
                   <div>Status: <span className="font-medium capitalize">{currentOrder.status}</span></div>
-                  <div>Created: {new Date(currentOrder.createdAt).toLocaleString()}</div>
+                  {/* <div>Created: {new Date(currentOrder.createdAt).toLocaleString()}</div> */}
+                  <div>Order Date: {existingOrderDate(currentOrder.createdAt)}</div>
                 </div>
                 <ul className="divide-y">
                   {(currentOrder.items || []).map((i, idx) => (
@@ -628,18 +808,29 @@ export default function OrderFlow() {
                     </div>
                   </div>
                 )}
+                <hr class="border-t border-gray-300 my-4"></hr>
+                <div className="text-right">
+                  {/* <p className="text-sm text-gray-600">Subtotal: ₹{subtotal.toFixed(2)}</p> */}
+                  <p className="font-bold text-lg text-green-600">Total: ₹{currentOrder?.total.toFixed(2)}</p>
+                </div>
 
-                <div className="mt-6 flex justify-end">
-                   
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
+                  <button
+                    onClick={handlePrintBill}
+                    disabled={!orderId}
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white px-3 py-3 rounded-lg font-semibold hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <PrinterIcon className="h-5 w-5" />
+                    Print Bill
+                  </button>
                   <button
                     onClick={handleTakeCashPayment}
                     disabled={isPaying || isUpdatingStatus}
-                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed col-span-1 sm:col-span-2 lg:col-span-1"
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-2 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed col-span-1 sm:col-span-2 lg:col-span-1"
                   >
                     <CreditCardIcon className="h-5 w-5" />
                     Take Cash & Complete
                   </button>
-                
                 </div>
               </div>
             )}
@@ -667,7 +858,7 @@ export default function OrderFlow() {
                     <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition">
                       <div className="flex items-center gap-3 flex-1">
                         <img
-                          src={item.imageUrl || '/placeholder-menu.jpg'}
+                          src={item.imageUrl || '/images/No-Image-Placeholder.png'}
                           alt={item.name}
                           className="w-16 h-16 object-cover rounded-lg"
                         />
@@ -736,10 +927,11 @@ export default function OrderFlow() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <button
                   onClick={handleCreateKOT}
-                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-3 rounded-lg font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all shadow-md"
+                  disabled={isCreatingKOT}
+                  className={`flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-3 rounded-lg font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all shadow-md ${isCreatingKOT ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
                   <PrinterIcon className="h-5 w-5" />
-                  New KOT
+                  {isCreatingKOT ? 'Creating KOT...' : 'New KOT'}
                 </button>
                 <button
                   onClick={handlePrintKOT}
@@ -749,15 +941,15 @@ export default function OrderFlow() {
                   <PrinterIcon className="h-5 w-5" />
                   Print KOT
                 </button>
-             
-                    <button
-                  onClick={()=>orderId ? handleUpdateOrder() : handleCreateOrder()}
-                  disabled={cart.length === 0 || !selectedTable}
-                  className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 flex-1 ml-4"
+
+                <button
+                  onClick={() => orderId ? handleUpdateOrder() : handleCreateOrder()}
+                  disabled={cart.length === 0 || !selectedTable || isCreatingOrder || isUpdatingOrder}
+                  className={`bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 flex-1 ml-4 ${isCreatingOrder || isUpdatingOrder ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                    {orderId ? 'Update Order' : 'Create Order'}
+                  {orderId ? (isUpdatingOrder ? 'Updating...' : 'Update Order') : (isCreatingOrder ? 'Creating...' : 'Create Order')}
                 </button>
-                
+
               </div>
 
               {/* KOT Preview (if order exists) */}
@@ -769,7 +961,7 @@ export default function OrderFlow() {
               )}
             </div>
 
-          
+
           </div>
 
           {/* Fixed Bottom Bar (Mobile Responsive) */}
@@ -783,11 +975,11 @@ export default function OrderFlow() {
                   <span className="font-semibold text-gray-900">Total: ₹{total.toFixed(2)}</span>
                 </div>
                 <button
-                  onClick={()=>orderId ? handleUpdateOrder() : handleCreateOrder()}
+                  onClick={() => orderId ? handleUpdateOrder() : handleCreateOrder()}
                   disabled={cart.length === 0 || !selectedTable}
                   className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 flex-1 ml-4"
                 >
-                    {orderId ? 'Update Order' : 'Create Order'}
+                  {orderId ? 'Update Order' : 'Create Order'}
                 </button>
               </div>
             </div>

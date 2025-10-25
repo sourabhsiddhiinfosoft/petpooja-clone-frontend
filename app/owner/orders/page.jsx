@@ -1,12 +1,13 @@
 "use client"
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import { TableLoading } from "../../../components/Loading/tableLoading";
 
-import { PencilSquareIcon, EyeIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { PencilSquareIcon, EyeIcon,ChevronDownIcon,ChevronUpIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCreateOrderMutation, useGetOrdersQuery, useUpdateOrderStatusMutation } from "../../../store/api/ownerApi";
 import { ModalBox } from "../../../components/ModalBox";
 import Link from "next/link";
+import { formatDateToDDMMYY } from "../../../lib/dateConvertion";
 
 export default function OwnerOrders() {
   const [search, setSearch] = useState("");
@@ -34,6 +35,8 @@ export default function OwnerOrders() {
   // Mutations
   const [createOrder, { isLoading: isCreating }] = useCreateOrderMutation();
   const [updateOrderStatus, { isLoading: isUpdating }] = useUpdateOrderStatusMutation();
+   // Accordion state
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
 
   // Filter and paginate orders (same as before)
   const filteredData = useMemo(() => {
@@ -50,6 +53,11 @@ export default function OwnerOrders() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+   // Toggle accordion
+  const toggleAccordion = (orderId) => {
+    setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
+  };
 
   // Open modal and initialize form data
   const handleOpen = (type, order = null) => {
@@ -204,49 +212,98 @@ export default function OwnerOrders() {
                   <th className="p-3 text-left">Table Name</th>
                   <th className="p-3 text-left">Type</th>
                   <th className='p-3 text-left'>Status</th>
+                  <th className="p-3 text-left">Date</th>
+                  <th className="p-3 text-left">Payment Method</th>
+                  <th className="p-3 text-left">Items</th>
                   <th className="p-3 text-left">Actions</th>
                 </tr>
               </thead>
+              
               <tbody>
-                {paginatedData.map((cat, idx) => (
-                  <tr
-                    key={cat._id}
-                    className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                      } hover:bg-blue-50 transition`}
-                  >
-                    <td className="p-3">
-                      {cat._id}
-                    </td>
-                    <td className="p-3 font-medium">{cat?.tableId?.name}</td>
-                    <td className="p-3">{cat?.type}</td>
-                    <td className="p-3">{cat?.status}</td>
-                    <td className="p-3 flex gap-3">
-                      <button
-                      disabled={true}
-                        title="Edit"
-                        className="p-2 rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
-                      onClick={() => handleOpen("edit", cat)}
-                      >
-                        <PencilSquareIcon className="h-4 w-4" aria-label="Edit data" />
-                      </button>
-                      <button
-                        title="View"
-                        className="p-2 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200"
-                      onClick={() => handleOpen("view", cat)}
-                      >
-                        <EyeIcon className="h-4 w-4 text-black" aria-label='View data' />
-                      </button>
-                      <button
-                        title="Delete"
-                        className="p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
-                      onClick={() => handleOpen("delete", cat)}
-                      >
-                        <TrashIcon className="h-4 w-4" aria-label="Delete data" />
-                      </button>
-                    </td>
-                  </tr>
+                {paginatedData.map((order, idx) => (
+                  <React.Fragment key={order._id}>
+                    <tr
+                      className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-blue-50 transition cursor-pointer`}
+                      onClick={() => toggleAccordion(order._id)}
+                    >
+                      <td className="p-3">{order._id}</td>
+                      <td className="p-3 font-medium">{order?.tableId?.name}</td>
+                      <td className="p-3">{order?.type}</td>
+                      <td className="p-3">{order?.status}</td>
+                      <td className="p-3">{formatDateToDDMMYY(new Date(order?.createdAt))}</td>
+                      <td className="p-3">{order?.paymentMethod}</td>
+                      <td className="p-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleAccordion(order._id);
+                          }}
+                          className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                        >
+                          {order.items?.length || 0} items
+                          {expandedOrderId === order._id ? (
+                            <ChevronUpIcon className="h-4 w-4" />
+                          ) : (
+                            <ChevronDownIcon className="h-4 w-4" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="p-3 flex gap-3">
+                        <button
+                          disabled={true}
+                          title="Edit"
+                          className="p-2 rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpen("edit", order);
+                          }}
+                        >
+                          <PencilSquareIcon className="h-4 w-4" aria-label="Edit data" />
+                        </button>
+                        <button
+                          title="View"
+                          className="p-2 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpen("view", order);
+                          }}
+                        >
+                          <EyeIcon className="h-4 w-4 text-black" aria-label='View data' />
+                        </button>
+                        <button
+                          title="Delete"
+                          className="p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpen("delete", order);
+                          }}
+                        >
+                          <TrashIcon className="h-4 w-4" aria-label="Delete data" />
+                        </button>
+                      </td>
+                    </tr>
+                    {/* Accordion Content */}
+                    {expandedOrderId === order._id && (
+                      <tr>
+                        <td colSpan="8" className="bg-gray-50 border-t border-gray-200">
+                          <div className="p-4">
+                            <h4 className="font-semibold mb-2">Order Items:</h4>
+                            <ul className="space-y-2">
+                              {order.items?.map((item, itemIdx) => (
+                                <li key={itemIdx} className="flex justify-between items-center bg-white p-2 rounded shadow-sm">
+                                  <span>{item.name || item.menuItem} (Qty: {item.qty})</span>
+                                  <span className="font-medium">₹{item.price?.toFixed(2) || "N/A"}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
+           
             </table>
           </div>
         )}

@@ -270,8 +270,8 @@ export default function OwnerCategories() {
                         } hover:bg-blue-50 transition`}
                     >
                       <td className="p-3">
-                        <img
-                          src={cat.imageUrl}
+                       <img
+                          src={cat.imageUrl || '/images/No-Image-Placeholder.png'}
                           alt={cat.name}
                           className="w-12 h-12 object-cover rounded-md border"
                         />

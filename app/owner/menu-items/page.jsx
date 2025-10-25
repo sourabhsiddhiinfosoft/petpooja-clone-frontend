@@ -14,25 +14,36 @@ import { TableLoading } from '../../../components/Loading/tableLoading';
 import Link from 'next/link';
 import { EyeIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
-import Select from 'react-select'; // Import React Select
+import Select from 'react-select';
 import { darkStyles } from '../../../styles/darkmodeSelect';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
+import axios from 'axios';
+import { updateMenuImage } from '../../../lib/updateMenu';
 
 export default function OwnerMenuItems() {
   const { currentBranch, branches, user } = useCurrentBranch();
   const restaurantId = user?.restaurantId || "";
   const branchId = currentBranch?._id || "";
 
-  // Build query params
+  // New: State for selected category tab
+  const [selectedCategoryId, setSelectedCategoryId] = useState(""); // "" for All
+
+  // Build query params (include categoryId)
   let q = "";
   if (restaurantId) q += `restaurantId=${restaurantId}`;
   if (branchId) q += `${q ? "&" : ""}branchId=${branchId}`;
+  if (selectedCategoryId) q += `${q ? "&" : ""}categoryId=${selectedCategoryId}`;
 
-  const { data = [], isLoading, isError } = useGetMenuQuery(q, { skip: !restaurantId });
+  const { data = [], isLoading, isError, refetch } = useGetMenuQuery(q, { skip: !restaurantId });
   const { data: categories = [] } = useGetCategoriesQuery(`${restaurantId}?branchId=${branchId}`, { skip: !restaurantId });
 
   const [createMenuItem] = useAddMenuItemMutation();
   const [updateMenuItem] = useUpdateMenuItemMutation();
   const [deleteMenuItem] = useDeleteMenuItemMutation();
+  const [editingImageId, setEditingImageId] = useState(null);
+  const [newImageFile, setNewImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,16 +55,15 @@ export default function OwnerMenuItems() {
     price: '',
     description: '',
     isAvailable: true,
-    type: 'single', // New: Apply To type
-    branchIds: [branchId], // New: Pre-select current branch as array
+    type: 'single',
+    branchIds: [branchId],
     restaurantId,
     branchId,
-    // sku:""
   });
 
-  const itemsPerPage = 5;
+  const itemsPerPage = 8; // Adjusted for cards
 
-  // Filter menu items
+  // Filter menu items (client-side search)
   const filteredData = useMemo(() => {
     return data.filter(
       (item) =>
@@ -77,7 +87,7 @@ export default function OwnerMenuItems() {
     }));
   }, [categories]);
 
-  // Prepare options for React Select (branches) - New
+  // Prepare options for React Select (branches)
   const branchOptions = useMemo(() => {
     return branches.map((branch) => ({
       value: branch._id,
@@ -85,7 +95,7 @@ export default function OwnerMenuItems() {
     }));
   }, [branches]);
 
-  // Updated handleOpen (initialize type/branchIds for add/edit)
+  // Updated handleOpen
   const handleOpen = (type, item) => {
     if (type === 'add') {
       setNewItem({
@@ -94,27 +104,25 @@ export default function OwnerMenuItems() {
         price: '',
         description: '',
         isAvailable: true,
-        type: 'single', // New
-        branchIds: branchId ? [branchId] : [], // New: Pre-select current
+        type: 'single',
+        branchIds: branchId ? [branchId] : [],
         restaurantId,
         branchId,
         imageFile: null,
         previewUrl: '',
-        // sku:""
       });
     } else {
-      // For edit: Ensure category/branchIds/type are set
       setSelectedItem(item ? {
         ...item,
         categoryId: item?.categoryId || '',
-        branchIds: item.branchIds || [branchId], // New: Ensure array
-        type: item.type || 'single', // New
+        branchIds: item.branchIds || [branchId],
+        type: item.type || 'single',
       } : null);
     }
     setModalType(type);
   };
 
-  // Updated handleClose (reset newItem including type/branchIds)
+  // Updated handleClose
   const handleClose = () => {
     setSelectedItem(null);
     setModalType(null);
@@ -128,12 +136,13 @@ export default function OwnerMenuItems() {
       branchIds: branchId ? [branchId] : [],
       restaurantId,
       branchId,
-      // sku:""
     });
+    setEditingImageId(null);
+    setNewImageFile(null);
+    setImagePreview(null);
   };
 
-
-  // Handle category change with React Select (unified for add/edit)
+  // Handle category change with React Select
   const handleCategoryChange = (selectedOption) => {
     const categoryId = selectedOption ? selectedOption.value : '';
     if (modalType === 'add') {
@@ -157,171 +166,65 @@ export default function OwnerMenuItems() {
     }
   };
 
-// ✅ Updated handleUpdate (supports image upload + branch logic)
-const handleUpdate = async () => {
-  if (!selectedItem?._id) return;
-
-  try {
-    // 1️⃣ Prepare FormData (to support file uploads)
-    const formData = new FormData();
-
-    // 2️⃣ Add text fields
-    formData.append("restaurantId", restaurantId);
-    formData.append("branchId", branchId);
-    formData.append("categoryId", selectedItem.categoryId);
-    formData.append("type", selectedItem.type || "single");
-
-    // 3️⃣ Add branchIds (if multiple)
-    if (selectedItem.type === "all") {
-      // no need to append branchIds
-    } else if (Array.isArray(selectedItem.branchIds)) {
-      selectedItem.branchIds.forEach((id) => {
-        formData.append("branchIds[]", id);
-      });
-    }
-
-    // 4️⃣ Add all other fields except image
-    Object.keys(selectedItem).forEach((key) => {
-      if (
-        ![
-          "_id",
-          "image",
-          "branchIds",
-          "type",
-          "restaurantId",
-          "branchId",
-          "categoryId",
-        ].includes(key)
-      ) {
-        formData.append(key, selectedItem[key]);
-      }
-    });
-
-    // 5️⃣ Handle image file upload (if user selected new image)
-    if (selectedItem.imageFile) {
-      formData.append("image", selectedItem.imageFile); // must match multer field name
-    }
-
-    if(!formData && Object.keys(formData).length == 0){
-      return toast.error("No changes made to update.formdata is blank");
-    }
-
-    // 6️⃣ Call API
-    await updateMenuItem({ _id: selectedItem._id, formData }).unwrap();
-
-    toast.success("Menu item updated successfully.");
-    handleClose();
-  } catch (error) {
-    console.error("Update error:", error);
-    if (error?.status === 400) {
-      toast.error(
-        `Failed to update menu item.\n${error?.data?.error || ""}`
-      );
-    } else {
-      toast.error("Something went wrong");
-    }
-  }
-};
-
-
-  // // Updated handleUpdate (process branchIds and add type)
-  // const handleUpdate = async () => {
-  //   if (!selectedItem?._id) return;
-  //   try {
-  //     const updatedItem = {
-  //       ...selectedItem,
-  //       restaurantId,
-  //       branchId,
-  //       categoryId: selectedItem.categoryId,
-  //       branchIds: selectedItem.type === 'all' ? [] : (selectedItem.branchIds || []), // New: Process branchIds
-  //     };
-  //     await updateMenuItem(updatedItem).unwrap();
-  //     toast.success('Menu item updated successfully.');
-  //     handleClose();
-  //   } catch (error) {
-  //     if (error?.status == 400) {
-  //       toast.error(`Failed to update menu item.  \n ${error?.data ? error?.data?.error : ""}`);
-  //     } else {
-  //       toast.error(`Something went wrong`);
-  //     }
-  //   }
-  // };
-
-  //Upload with image
-
-  const handleCreate = async () => {
+  const updateMenuItemImage = async (id, imageFile) => {
     try {
-      const formData = new FormData();
+      await updateMenuImage(id, imageFile);
+      toast.success("Menu item image updated successfully.");
+      refetch();
+    } catch (error) {
+      console.error("Error updating image:", error);
+      toast.error("Error updating image.");
+    }
+  };
 
-      formData.append("name", newItem.name);
-      formData.append("price", newItem.price);
-      formData.append("description", newItem.description || "");
-      formData.append("isAvailable", newItem.isAvailable ?? true);
-      formData.append("categoryId", newItem.categoryId);
-      formData.append("type", newItem.type || "single");
-      formData.append("restaurantId", restaurantId);
-
-      if (newItem.type === "multiple" && newItem.branchIds?.length) {
-        newItem.branchIds.forEach((id) => formData.append("branchIds[]", id));
-      } else {
-        formData.append("branchId", branchId);
-      }
-
-      // 🖼 Append file (image)
-      if (newItem.imageFile) {
-        formData.append("image", newItem.imageFile);
-      }
-
-      if(!formData && formData.keys().length == 0){
-        return toast.error("Form data is empty. Please fill in the details.");
-      }
-
-      console.log("Creating with formData:", formData);
-
-      await createMenuItem(formData).unwrap();
-      toast.success("Menu item added successfully.");
+  // Updated handleUpdate
+  const handleUpdate = async () => {
+    if (!selectedItem?._id) return;
+    try {
+      const updatedItem = {
+        ...selectedItem,
+        restaurantId,
+        branchId,
+        categoryId: selectedItem.categoryId,
+        branchIds: selectedItem.type === 'all' ? [] : (selectedItem.branchIds || []),
+      };
+      await updateMenuItem(updatedItem).unwrap();
+      toast.success('Menu item updated successfully.');
       handleClose();
     } catch (error) {
-      console.log(error);
-      if (error?.status === 400) {
-        toast.error(
-          `Failed to add menu item.\n ${error?.data ? error?.data?.error : ""}`
-        );
+      if (error?.status == 400) {
+        toast.error(`Failed to update menu item.  \n ${error?.data ? error?.data?.error : ""}`);
       } else {
-        toast.error("Something went wrong.");
+        toast.error(`Something went wrong`);
       }
     }
   };
 
+  // Updated handleCreate
+  const handleCreate = async () => {
+    try {
+      const itemToCreate = {
+        ...newItem,
+        restaurantId,
+        branchId,
+        categoryId: newItem?.categoryId,
+        branchIds: newItem.type === 'all' ? [] : (newItem.branchIds || []),
+      };
+      await createMenuItem(itemToCreate).unwrap();
+      toast.success('Menu item added successfully.');
+      handleClose();
+    } catch (error) {
+      console.log(error)
+      if (error?.status == 400) {
+        toast.error(`Failed to add menu item. \n ${error?.data ? error?.data?.error : ""}`);
+      } else {
+        toast.error(`Something went wrong`);
+      }
+    }
+  };
 
-
-  // Updated handleCreate (process branchIds and add type)
-  // const handleCreate = async () => {
-  //   try {
-  //     const itemToCreate = {
-  //       ...newItem,
-  //       restaurantId,
-  //       branchId,
-  //       categoryId: newItem?.categoryId,
-  //       branchIds: newItem.type === 'all' ? [] : (newItem.branchIds || []), // New: Process branchIds
-  //     };
-  //     await createMenuItem(itemToCreate).unwrap();
-  //     toast.success('Menu item added successfully.');
-  //     handleClose();
-  //   } catch (error) {
-  //     console.log(error)
-  //     if (error?.status == 400) {
-  //       toast.error(`Failed to add menu item. \n ${error?.data ? error?.data?.error : ""}`);
-  //     } else {
-  //       toast.error(`Something went wrong`);
-  //     }
-  //   }
-  // };
-
-  // Updated handleConfirm (add branch validation)
+  // Updated handleConfirm
   const handleConfirm = async () => {
-    // Existing category validation
-
     if (modalType === 'delete') {
       if (selectedItem && selectedItem._id) {
         await handleDelete(selectedItem._id);
@@ -334,14 +237,12 @@ const handleUpdate = async () => {
       toast.error('Please select a category.');
       return;
     }
-    // New: Branch validation
     const currentType = getFormValue('type');
     const currentBranchIds = getFormValue('branchIds') || [];
     if ((currentType === 'single' || currentType === 'multiple') && currentBranchIds.length === 0) {
       toast.error('Please select at least one branch.');
       return;
     }
-    // Rest of your existing logic...
     if (modalType === 'edit') {
       if (selectedItem && selectedItem._id) {
         await handleUpdate();
@@ -349,19 +250,18 @@ const handleUpdate = async () => {
     } else if (modalType === 'add') {
       await handleCreate();
     }
-
   };
 
-  // Update handleInputChange to handle type changes (reset branchIds on type change) - Updated
+  // Update handleInputChange
   const handleInputChange = (field, value) => {
     if (modalType === 'add') {
       let updated = { ...newItem, [field]: value };
 
       if (field === 'type') {
         if (value === 'all') {
-          updated.branchIds = []; // Empty for all
+          updated.branchIds = [];
         } else if (value === 'single' && newItem.branchIds.length > 1) {
-          updated.branchIds = [newItem.branchIds[0] || branchId]; // Keep first or current
+          updated.branchIds = [newItem.branchIds[0] || branchId];
         }
       }
 
@@ -371,9 +271,9 @@ const handleUpdate = async () => {
 
       if (field === 'type') {
         if (value === 'all') {
-          updated.branchIds = []; // Empty for all
+          updated.branchIds = [];
         } else if (value === 'single' && selectedItem.branchIds.length > 1) {
-          updated.branchIds = [selectedItem.branchIds[0]]; // Keep first
+          updated.branchIds = [selectedItem.branchIds[0]];
         }
       }
 
@@ -381,28 +281,26 @@ const handleUpdate = async () => {
     }
   };
 
-  // Get current form values for display
+  // Get current form values
   const getFormValue = (field) => {
     return modalType === 'add' ? newItem[field] : selectedItem?.[field] || '';
   };
 
-  // Get current category option for React Select
+  // Get current category option
   const getCurrentCategoryOption = () => {
     const currentCategoryId = getFormValue('categoryId');
     return categoryOptions.find((opt) => opt.value === (currentCategoryId?._id || currentCategoryId)) || null;
-    // return categoryOptions.find((opt) => opt.value === currentCategoryId) || selectedItem?.categoryId ? { value: selectedItem.categoryId._id, label: selectedItem.categoryId.name } : null;
-
   };
 
-  // Get current branch options for React Select - New
+  // Get current branch options
   const getCurrentBranchOptions = () => {
     const currentBranchIds = getFormValue('branchIds') || [];
     return currentBranchIds.map((id) =>
       branchOptions.find((opt) => opt.value === id)
-    ).filter(Boolean); // Filter out nulls
+    ).filter(Boolean);
   };
 
-  // Handle branch change with React Select (unified for add/edit) - New
+  // Handle branch change
   const handleBranchChange = (selectedOptions) => {
     let newBranchIds;
     const currentType = getFormValue('type');
@@ -412,7 +310,7 @@ const handleUpdate = async () => {
     } else if (currentType === 'multiple') {
       newBranchIds = selectedOptions ? selectedOptions.map((opt) => opt.value) : [];
     } else {
-      newBranchIds = []; // All: empty
+      newBranchIds = [];
     }
     if (modalType === 'add') {
       setNewItem((prev) => ({ ...prev, branchIds: newBranchIds }));
@@ -421,9 +319,22 @@ const handleUpdate = async () => {
     }
   };
 
-  function getModelTitle() {
-    return
-  }
+  const handleImageEditOpen = (id) => {
+    setEditingImageId(id);
+    setImagePreview(null);
+    setNewImageFile(null);
+    setModalType('editImage');
+  };
+
+  // Skeleton Card Component
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4 animate-pulse">
+      <div className="w-full h-32 bg-gray-300 rounded mb-4"></div>
+      <div className="h-4 bg-gray-300 rounded mb-2"></div>
+      <div className="h-4 bg-gray-300 rounded mb-2 w-3/4"></div>
+      <div className="h-4 bg-gray-300 rounded w-1/2"></div>
+    </div>
+  );
 
   return (
     <DashboardLayout userType="owner">
@@ -451,83 +362,102 @@ const handleUpdate = async () => {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {isLoading && <TableLoading />}
-          {isError && <p className="text-red-600 p-6">Failed to load menu items.</p>}
+
+        {/* Category Tabs */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={`px-4 py-2 rounded-lg font-medium transition ${
+                selectedCategoryId === "" ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              onClick={() => setSelectedCategoryId("")}
+            >
+              All
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat._id}
+                className={`px-4 py-2 rounded-lg font-medium transition ${
+                  selectedCategoryId === cat._id ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+                onClick={() => setSelectedCategoryId(cat._id)}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Cards Grid */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          {isLoading && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {Array.from({ length: 8 }).map((_, idx) => (
+                <SkeletonCard key={idx} />
+              ))}
+            </div>
+          )}
+          {isError && <p className="text-red-600">Failed to load menu items.</p>}
           {!isLoading && !isError && (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm text-gray-700">
-                <thead className="bg-gray-100 text-gray-800 sticky top-0">
-                  <tr>
-                    <th className="p-3 text-left">No.</th>
-                    <th className="p-3 text-left">Menu Image</th>
-                    <th className="p-3 text-left">Name</th>
-                    <th className="p-3 text-left">Category</th>
-                    <th className="p-3 text-left">Price</th>
-                    <th className="p-3 text-left">Availability</th>
-                    {/* <th className="p-3 text-left">Type</th> */}
-                    <th className="p-3 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedData.map((item, idx) => (
-                    <tr
-                      key={item._id}
-                      className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                        } hover:bg-blue-50 transition`}
-                    >
-                      <td className="p-3 font-medium">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
-                      <td className="p-3 w-44">
-                         <img
+            <>
+              {paginatedData.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {paginatedData.map((item) => (
+                    <div key={item._id} className="bg-white rounded-lg shadow-md border border-gray-200 p-4 hover:shadow-lg transition">
+                      <div className="relative">
+                        <img
                           src={item?.image || '/images/No-Image-Placeholder.png'}
                           alt={`${item?.name}_img`}
-                          className="w-22 h-22 object-cover rounded border"
+                          className="w-full h-32 object-cover rounded mb-4"
                         />
-                        </td>
-                      <td className="p-3 font-medium">{item.name}</td>
-                      <td className="p-3">{item?.categoryId?.name || 'N/A'}</td>
-                      <td className="p-3">₹{item.price}</td>
-                      <td className="p-3">
-                        {item.isAvailable ? (
-                          <span className="text-green-600 font-semibold">Available</span>
-                        ) : (
-                          <span className="text-gray-400">Unavailable</span>
-                        )}
-                      </td>
-                      {/* <td className="p-3">{item?.tags ? String(item.tags) : 'N/A'}</td> */}
-                      <td className="p-3 flex items-center gap-3">
+                        <button
+                          title="Edit Image"
+                          className="absolute top-2 left-2 p-1 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200"
+                          onClick={() => handleImageEditOpen(item._id)}
+                        >
+                          <PencilSquareIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.name}</h3>
+                      <p className="text-sm text-gray-600 mb-1">{item?.categoryId?.name || 'N/A'}</p>
+                      <p className="text-lg font-bold text-green-600 mb-2">₹{item.price}</p>
+                      <p className={`text-sm font-medium mb-4 ${item.isAvailable ? 'text-green-600' : 'text-gray-400'}`}>
+                        {item.isAvailable ? 'Available' : 'Unavailable'}
+                      </p>
+                      <div className="flex gap-2">
                         <button
                           title="Edit"
-                          className="p-2 rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                          className="flex-1 p-2 rounded bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
                           onClick={() => handleOpen('edit', item)}
                         >
-                          <PencilSquareIcon className="h-4 w-4" aria-label="Edit data" />
+                          <PencilSquareIcon className="h-4 w-4 mx-auto" />
                         </button>
                         <button
                           title="View"
-                          className="p-2 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200"
+                          className="flex-1 p-2 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
                           onClick={() => handleOpen('view', item)}
                         >
-                          <EyeIcon className="h-4 w-4 text-black" aria-label='View data' />
+                          <EyeIcon className="h-4 w-4 mx-auto" />
                         </button>
                         <button
                           title="Delete"
-                          className="p-2 rounded-full bg-red-100 text-red-700 hover:bg-red-200"
+                          className="flex-1 p-2 rounded bg-red-100 text-red-700 hover:bg-red-200"
                           onClick={() => handleOpen('delete', item)}
                         >
-                          <TrashIcon className="h-4 w-4" aria-label="Delete table" />
+                          <TrashIcon className="h-4 w-4 mx-auto" />
                         </button>
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-12">No menu items found for the selected category.</p>
+              )}
+            </>
           )}
-          {!isLoading && paginatedData?.length == 0 && (<div className='h-[200px] flex justify-center items-center w-full p-2 text-neutral-700'><div>Data not availabile</div></div>)}
 
-          {/* Pagination */}
-          <div className="flex justify-between items-center p-4 border-t bg-gray-50">
+                    {/* Pagination */}
+          <div className="flex justify-between items-center p-4 border-t bg-gray-50 mt-2">
             <p className="text-sm text-gray-600">
               Page {currentPage} of {totalPages}
             </p>
@@ -548,11 +478,10 @@ const handleUpdate = async () => {
           </div>
         </div>
 
-
         {/* Modal */}
         <ModalBox
           active={!!modalType}
-          title={modalType === 'view' ? 'View Menu Item' : modalType === 'edit' ? 'Edit Menu Item' : modalType === 'add' ? 'Add Menu Item' : 'Delete Menu Item'}
+          title={modalType === 'editImage' ? 'Edit Menu Image' : modalType === 'edit' ? 'Edit Menu Item' : modalType === 'add' ? 'Add Menu Item' : 'Delete Menu Item'}
           onClose={handleClose}
           onConfirm={modalType === 'delete' ? handleConfirm : null}
           confirmText={modalType === 'delete' ? 'Delete' : modalType === 'add' ? 'Add' : 'Save'}
@@ -572,7 +501,6 @@ const handleUpdate = async () => {
                   />
                 </div>
               )}
-
               <p>
                 <b>Category:</b> {selectedItem?.categoryId?.name || 'N/A'}
               </p>
@@ -583,7 +511,7 @@ const handleUpdate = async () => {
                 <b>Description:</b> {selectedItem?.description || 'N/A'}
               </p>
               <p>
-                <b>Apply To:</b> {selectedItem?.type || 'N/A'} | <b>Branches:</b> {selectedItem?.branchIds?.length || 0} {/* New */}
+                <b>Apply To:</b> {selectedItem?.type || 'N/A'} | <b>Branches:</b> {selectedItem?.branchIds?.length || 0}
               </p>
               <p>
                 <b>Status:</b>{' '}
@@ -617,59 +545,6 @@ const handleUpdate = async () => {
               </div>
 
               <hr className="my-2" />
-
-              <div className="mb-2">
-                <label className="block mb-1 font-medium">Menu Item Image</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      const maxSizeKB = 100; // 👈 100 KB limit
-                      const maxSizeBytes = maxSizeKB * 1024;
-
-                      if (file.size > maxSizeBytes) {
-                        toast.error(`Image size must be less than ${maxSizeKB} KB`);
-                        return; // Stop processing
-                      }
-
-                      handleInputChange("imageFile", file);
-                      const reader = new FileReader();
-                      reader.onload = (ev) => handleInputChange("previewUrl", ev.target.result);
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                  className="border rounded px-3 py-2 w-full"
-                />
-
-
-                {/* Image preview */}
-                {getFormValue("previewUrl") && (
-                  <div className="mt-2">
-                    <img
-                      src={getFormValue("previewUrl")}
-                      alt="Preview"
-                      className="w-24 h-24 object-cover rounded border"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <hr className="my-2" />
-
-              {/* <div className='mb-2'>
-                <label className="block mb-1 font-medium">Menu Item Sku</label>
-                <input
-                  type="text"
-                  value={getFormValue('sku')}
-                  onChange={(e) => handleInputChange('sku', e.target.value)}
-                  placeholder="Ex:roti-1 (short-code)"
-                  className="border rounded px-3 py-2 w-full"
-                  required
-                />
-              </div>
-              <hr className="my-2" /> */}
 
               <div className='mb-2'>
                 <label className="block mb-1 font-medium">Menu Item Category</label>
@@ -788,12 +663,60 @@ const handleUpdate = async () => {
               Are you sure you want to delete <b>{selectedItem.name}</b>?
             </p>
           )}
+
+          {modalType === 'editImage' && editingImageId && (
+            <div className="space-y-4">
+              <p>Select a new image for this menu item (max 100KB).</p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const maxSizeKB = 100;
+                    const maxSizeBytes = maxSizeKB * 1024;
+
+                    if (file.size > maxSizeBytes) {
+                      toast.error(`Image size must be less than ${maxSizeKB} KB`);
+                      return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setImagePreview(ev.target.result);
+                      setNewImageFile(file);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="border rounded px-3 py-2 w-full"
+              />
+              {imagePreview && (
+                <div className="mt-2">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-24 h-24 object-cover rounded border"
+                  />
+                </div>
+              )}
+              <button
+                onClick={async () => {
+                  if (newImageFile) {
+                    await updateMenuItemImage(editingImageId, newImageFile);
+                    handleClose();
+                  } else {
+                    toast.error("Please select an image first.");
+                  }
+                }}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700"
+              >
+                Update Image
+              </button>
+            </div>
+          )}
         </ModalBox>
-
-
       </div>
     </DashboardLayout>
   );
 }
-
-

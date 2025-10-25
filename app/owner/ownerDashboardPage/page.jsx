@@ -1,365 +1,176 @@
 "use client";
+import React, { useState } from "react";
+import { Bar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import { formatDateToDDMMYY } from "../../../lib/dateConvertion";
+import { useGetOwnerCustomerStatsQuery, useGetOwnerDashboardQuery, useGetOwnerRevenueQuery } from "../../../store/api/ownerApi";
+import { CurrencyDollarIcon, ShoppingBagIcon, TableCellsIcon, ClockIcon, DocumentTextIcon, UsersIcon } from "@heroicons/react/24/outline"; // Add icons
+import { ChartSkeleton, DashboardSkeleton } from "../../../components/Loading/ownerDashboardSkeleton";
 
-import { useEffect, useState } from "react";
-import { useGetOwnerDashboardQuery } from "../../../store/api/ownerApi";
-import { TilesCardLoading } from "../../../components/Loading/TilesCardLoading";
-// import { useGetOwnerDashboardSummaryQuery } from "../store/api/ownerApi";
-
-const pageTitle = "Owner Dashboard";
-const pageDescription = "Monitor your restaurant performance in real time";
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 const OwnerDashboardPage = () => {
-  const [selectedPeriod, setSelectedPeriod] = useState("Weekly");
-  const [selectedCustomerPeriod, setSelectedCustomerPeriod] =
-    useState("Yearly-2025");
+  const [revenueType, setRevenueType] = useState("weekly");
+  const [customerType, setCustomerType] = useState("yearly");
 
-//   const {
-//     data: dashboardSummary,
-//     isLoading,
-//     isError,
-//   } = useGetOwnerDashboardSummaryQuery();
+  // Fetch data
+  const { data: dashboard, isLoading: loadingDashboard } = useGetOwnerDashboardQuery();
+  const { data: revenueData, isLoading: loadingRevenue } = useGetOwnerRevenueQuery({
+    period: revenueType,
+    year: new Date().getFullYear(),
+  });
+  const { data: customerData, isLoading: loadingCustomers } = useGetOwnerCustomerStatsQuery({
+    period: customerType,
+    year: new Date().getFullYear(),
+  });
 
-const {data: dashboardData,isLoading,isError} = useGetOwnerDashboardQuery();
-
-// const [isLoading, setIsLoading] = useState(true);
-// const [isError, setIsError] = useState(false);
-
-// const dashboardData = {
-//   "todayRevenue": 4500,
-//   "totalOrders": 128,
-//   "activeTables": "6/20",
-//   "pendingOrders": 12,
-//   "menuItems": 58,
-//   "staffMembers": 14,
-//   "dailyRevenue": [
-//     { "_id": "2025-09-23", "total": 3200 },
-//     { "_id": "2025-09-24", "total": 4100 },
-//     { "_id": "2025-09-25", "total": 3800 },
-//     { "_id": "2025-09-26", "total": 5000 },
-//     { "_id": "2025-09-27", "total": 4200 },
-//     { "_id": "2025-09-28", "total": 3900 },
-//     { "_id": "2025-09-29", "total": 4500 }
-//   ],
-//   "totalCustomers": 230,
-//   "yearlyCustomers": [
-//     { "_id": 1, "count": 15 },
-//     { "_id": 2, "count": 20 },
-//     { "_id": 3, "count": 30 },
-//     { "_id": 4, "count": 28 },
-//     { "_id": 5, "count": 25 },
-//     { "_id": 6, "count": 40 },
-//     { "_id": 7, "count": 35 },
-//     { "_id": 8, "count": 22 },
-//     { "_id": 9, "count": 15 }
-//   ],
-//   "recentOrders": [
-//     {
-//       "orderId": "652c2d49c1a5ab23dfb3e91a",
-//       "orderType": "Dine-in",
-//       "customer": "Rahul Sharma",
-//       "amount": 750,
-//       "status": "Completed",
-//       "createdAt": "2025-09-29T10:25:00.000Z"
-//     },
-//     {
-//       "orderId": "652c2d49c1a5ab23dfb3e91b",
-//       "orderType": "Delivery",
-//       "customer": "Guest",
-//       "amount": 1200,
-//       "status": "Preparing",
-//       "createdAt": "2025-09-29T09:45:00.000Z"
-//     },
-//     {
-//       "orderId": "652c2d49c1a5ab23dfb3e91c",
-//       "orderType": "Takeaway",
-//       "customer": "Sneha Patel",
-//       "amount": 600,
-//       "status": "Completed",
-//       "createdAt": "2025-09-29T09:20:00.000Z"
-//     },
-//     {
-//       "orderId": "652c2d49c1a5ab23dfb3e91d",
-//       "orderType": "Dine-in",
-//       "customer": "Amit Verma",
-//       "amount": 900,
-//       "status": "Pending",
-//       "createdAt": "2025-09-29T08:50:00.000Z"
-//     },
-//     {
-//       "orderId": "652c2d49c1a5ab23dfb3e91e",
-//       "orderType": "Delivery",
-//       "customer": "Priya Singh",
-//       "amount": 1050,
-//       "status": "Delivered",
-//       "createdAt": "2025-09-29T08:30:00.000Z"
-//     }
-//   ]
-// }
-
-
-if (isLoading) return <LoadingComponent />;
-
-  if (isError) return <p>Error loading dashboard</p>;
-
-  // Fallback if no data
-  if (!dashboardData) return <p>No data available</p>;
-
-  const {
-    todayRevenue,
-    totalOrders,
-    activeTables,
-    pendingOrders,
-    menuItems,
-    staffMembers,
-    dailyRevenue,
-    totalCustomers,
-    yearlyCustomers,
-    recentOrders,
-  } = dashboardData;
-
-  // Metrics for Owner
-  const metrics = [
-    {
-      label: "Today's Revenue",
-      value: `₹${todayRevenue}`,
-      icon: "💵",
-      color: "bg-emerald-500",
-    },
-    {
-      label: "Total Orders",
-      value: totalOrders,
-      icon: "🧾",
-      color: "bg-sky-500",
-    },
-    {
-      label: "Active Tables",
-      value: activeTables,
-      icon: "🪑",
-      color: "bg-indigo-500",
-    },
-    {
-      label: "Pending Orders",
-      value: pendingOrders,
-      icon: "⏳",
-      color: "bg-amber-500",
-    },
-    {
-      label: "Menu Items",
-      value: menuItems,
-      icon: "🍽️",
-      color: "bg-purple-500",
-    },
-    {
-      label: "Staff Members",
-      value: staffMembers,
-      icon: "👷",
-      color: "bg-rose-500",
-    },
+  // Summary cards data with icons
+  const cards = [
+    { title: "Today Revenue", value: `₹${dashboard?.todayRevenue || 0}`, icon: CurrencyDollarIcon, color: "bg-gradient-to-r from-blue-500 to-blue-600" },
+    { title: "Total Orders", value: dashboard?.totalOrders || 0, icon: ShoppingBagIcon, color: "bg-gradient-to-r from-green-500 to-green-600" },
+    { title: "Active Tables", value: dashboard?.activeTables || "0/0", icon: TableCellsIcon, color: "bg-gradient-to-r from-purple-500 to-purple-600" },
+    { title: "Pending Orders", value: dashboard?.pendingOrders || 0, icon: ClockIcon, color: "bg-gradient-to-r from-yellow-500 to-yellow-600" },
+    { title: "Menu Items", value: dashboard?.menuItems || 0, icon: DocumentTextIcon, color: "bg-gradient-to-r from-indigo-500 to-indigo-600" },
+    { title: "Staff Members", value: dashboard?.staffMembers || 0, icon: UsersIcon, color: "bg-gradient-to-r from-pink-500 to-pink-600" },
   ];
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Completed":
-        return "bg-green-100 text-green-800";
-      case "Preparing":
-        return "bg-yellow-100 text-yellow-800";
-      case "Delivered":
-        return "bg-blue-100 text-blue-800";
-      case "Pending":
-        return "bg-gray-100 text-gray-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
+  // Chart.js data
+  const revenueChartData = {
+    labels: revenueData?.revenue?.map((item) => item._id) || [],
+    datasets: [
+      {
+        label: "Revenue",
+        data: revenueData?.revenue?.map((item) => item.total) || [],
+        backgroundColor: "rgba(59,130,246,0.8)",
+        borderRadius: 4,
+      },
+    ],
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
-        <p className="text-gray-600">{pageDescription}</p>
-      </div>
+  const customerChartData = {
+    labels: customerData?.stats?.map((item) => item._id) || [],
+    datasets: [
+      {
+        label: "Customers",
+        data: customerData?.stats?.map((item) => item.count) || [],
+        backgroundColor: "rgba(16,185,129,0.8)",
+        borderRadius: 4,
+      },
+    ],
+  };
 
-      {/* Metrics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {metrics.map((metric, index) => (
+  if (loadingDashboard) {
+    return <DashboardSkeleton />;  // Use the new skeleton component
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 space-y-8">
+      {/* Page Header */}
+      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+        <div className="text-left">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Owner Dashboard</h1>
+          <p className="text-gray-600">Monitor your restaurant's performance and insights</p>
+        </div>
+      </div>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+        {cards.map((c, i) => (
           <div
-            key={index}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+            key={i}
+            className={`${c.color} text-white rounded-xl shadow-lg p-6 text-center hover:shadow-xl transition-shadow duration-300`}
           >
-            <div className="flex items-center justify-between">
-              <div
-                className={`w-10 h-10 rounded-lg ${metric.color} flex items-center justify-center text-white text-lg`}
-              >
-                {metric.icon}
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-sm text-gray-600">{metric.label}</p>
-              <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
-            </div>
+            <c.icon className="h-8 w-8 mx-auto mb-2" />
+            <h3 className="text-sm font-medium opacity-90">{c.title}</h3>
+            <p className="text-2xl font-bold mt-1">{c.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Daily Revenue Chart */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Daily Revenue
-              </h3>
-              <p className="text-2xl font-bold text-gray-900">
-                ₹
-                {dailyRevenue.reduce((sum, day) => sum + day.total, 0).toLocaleString()}
-              </p>
-            </div>
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="Weekly">Weekly</option>
-              <option value="Monthly">Monthly</option>
-              <option value="Yearly">Yearly</option>
-            </select>
-          </div>
-          <div className="h-64 flex items-end justify-between space-x-1">
-            {dailyRevenue.map((day, index) => {
-              const height = (day.total / Math.max(...dailyRevenue.map(d => d.total))) * 100;
-              const label = new Date(day._id).toLocaleDateString("en-IN", {
-                day: "numeric",
-                month: "short",
-              });
-              return (
-                <div key={index} className="flex flex-col items-center flex-1">
-                  <div
-                    className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t"
-                    style={{ height: `${height}%` }}
-                  />
-                  <span className="text-xs text-gray-600 mt-2">{label}</span>
-                </div>
-              );
-            })}
-          </div>
+      {/* Revenue Chart */}
+      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-gray-800">Revenue Overview</h2>
+          <select
+            value={revenueType}
+            onChange={(e) => setRevenueType(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 transition"
+          >
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
         </div>
-
-        {/* Total Customers Chart */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Total Customers
-              </h3>
-              <p className="text-2xl font-bold text-gray-900">
-                {totalCustomers}
-              </p>
-            </div>
-            <select
-              value={selectedCustomerPeriod}
-              onChange={(e) => setSelectedCustomerPeriod(e.target.value)}
-              className="text-sm border border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="Yearly-2025">Yearly-2025</option>
-              <option value="Yearly-2024">Yearly-2024</option>
-              <option value="Monthly">Monthly</option>
-            </select>
+        {loadingRevenue ? (
+          <ChartSkeleton />
+        ) : (
+          <div className="w-full h-80">
+            <Bar data={revenueChartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
           </div>
-          <div className="h-64 flex items-end justify-between space-x-1">
-            {yearlyCustomers.map((month) => {
-              const height =
-                (month.count /
-                  Math.max(...yearlyCustomers.map((m) => m.count))) *
-                100;
-              const monthLabel = new Date(2025, month._id - 1).toLocaleString(
-                "en-IN",
-                { month: "short" }
-              );
-              return (
-                <div
-                  key={month._id}
-                  className="flex flex-col items-center flex-1"
-                >
-                  <div
-                    className="w-full bg-gradient-to-t from-green-500 to-green-400 rounded-t"
-                    style={{ height: `${height}%` }}
-                  />
-                  <span className="text-xs text-gray-600 mt-2">
-                    {monthLabel}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Recent Orders Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Recent Orders</h3>
+      {/* Customer Chart */}
+      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-gray-800">Customer Growth</h2>
+          <select
+            value={customerType}
+            onChange={(e) => setCustomerType(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 transition"
+          >
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
         </div>
+        {loadingCustomers ? (
+          <ChartSkeleton />
+        ) : (
+          <div className="w-full h-80">
+            <Bar data={customerChartData} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
+          </div>
+        )}
+      </div>
+
+      {/* Recent Orders */}
+      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+        <h2 className="text-xl font-semibold text-gray-800 mb-6">Recent Orders</h2>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
+          <table className="w-full text-sm text-left border-collapse">
+            <thead className="bg-gray-100">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Order ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Order Type
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total Amount
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date & Time
-                </th>
+                <th className="px-4 py-3 font-semibold text-gray-700">Order ID</th>
+                <th className="px-4 py-3 font-semibold text-gray-700">Customer</th>
+                <th className="px-4 py-3 font-semibold text-gray-700">Status</th>
+                <th className="px-4 py-3 font-semibold text-gray-700">Total</th>
+                <th className="px-4 py-3 font-semibold text-gray-700">Date</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {recentOrders.map((order, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {order.orderId}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order?.orderType?.toUpperCase() || "DINE-IN"}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {order.customer}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                    ₹{order.total}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
-                        order.status
-                      )}`}
-                    >
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(order.createdAt).toLocaleString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+            <tbody>
+              {dashboard?.recentOrders?.length ? (
+                dashboard.recentOrders.map((o) => (
+                  <tr key={o.orderId} className="border-t hover:bg-gray-50 transition">
+                    <td className="px-4 py-3">{o.orderId.slice(-6)}</td>
+                    <td className="px-4 py-3">{o.customer}</td>
+                    <td className="px-4 py-3 capitalize">{o.status}</td>
+                    <td className="px-4 py-3 font-semibold">₹{o.total}</td>
+                    <td className="px-4 py-3">{formatDateToDDMMYY(new Date(o.createdAt))}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="text-center py-8 text-gray-400">
+                    No recent orders found
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -369,17 +180,3 @@ if (isLoading) return <LoadingComponent />;
 };
 
 export default OwnerDashboardPage;
-
-
-const LoadingComponent = () =>(
-  <div>
-     <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-         <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
-        <p className="text-gray-600">{pageDescription}</p>
-      </div>
-    <TilesCardLoading />
-    </div>
-  </div>
-)

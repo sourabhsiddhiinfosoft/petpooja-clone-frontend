@@ -16,8 +16,9 @@ import {
 } from '@heroicons/react/24/outline';
 import DashboardLayout from '../../../components/DashboardLayout';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
-import { useCreateOrderMutation, useGetAreasWithTablesQuery, useUpdateOrderStatusMutation, useAddPaymentMutation, useGetCategoriesQuery, useGetMenuQuery, useUpdateTableMutation } from '../../../store/api/ownerApi';
+import { useCreateOrderMutation, useGetAreasWithTablesQuery, useUpdateOrderStatusMutation, useAddPaymentMutation, useGetCategoriesQuery, useGetMenuQuery, useUpdateTableMutation, useUpdateOrderMutation } from '../../../store/api/ownerApi';
 import { useCreateKOTMutation, useGetKOTQuery, useUpdateKOTStatusMutation } from '../../../store/api/staffApi';
+import { printBill } from '../../../lib/printBill';
 
 export default function OrderFlow() {
   const router = useRouter();
@@ -31,18 +32,20 @@ export default function OrderFlow() {
   const [cart, setCart] = useState([]); // { id, name, price, quantity, modifiers, subtotal }
   const [orderId, setOrderId] = useState(''); // For occupied table pre-load
   const [currentOrder, setCurrentOrder] = useState(null); // For occupied table pre-load
+  const [customer, setCustomer] = useState({ name: '', phone: '', address: '' }); // Optional customer details
 
   // APIs
-  const { data: awt = [] } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
+  const { data: awt = [], isLoading: isLoadingTables,refetch: refetchAreasWithTables } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
   const { data: categories = [] } = useGetCategoriesQuery(`${restaurantId}?branchId=${branchId}`, { skip: !restaurantId });
-  const { data: menuItems = [] } = useGetMenuQuery(`${restaurantId}&branchId=${branchId}&categoryId=${selectedCategory === 'all' ? 0 : selectedCategory}`, { skip: !restaurantId && !selectedCategory });
+  const { data: menuItems = [], isLoading: isLoadingMenu } = useGetMenuQuery(`${restaurantId}&branchId=${branchId}&categoryId=${selectedCategory === 'all' ? 0 : selectedCategory}`, { skip: !restaurantId && !selectedCategory });
   const { data: kotData } = useGetKOTQuery(orderId, { skip: !orderId });
-  const [createOrder] = useCreateOrderMutation();
+  const [createOrder, { isLoading: isCreatingOrder }] = useCreateOrderMutation();
   const [updateTable] = useUpdateTableMutation();
-  const [createKot] = useCreateKOTMutation();
+  const [createKot, { isLoading: isCreatingKOT }] = useCreateKOTMutation();
   const [addPayment, { isLoading: isPaying }] = useAddPaymentMutation();
   const [updateOrderStatus, { isLoading: isUpdatingStatus }] = useUpdateOrderStatusMutation();
   const [updateKOTStatus] = useUpdateKOTStatusMutation();
+  const [updateOrder, { isLoading: isUpdatingOrder }] = useUpdateOrderMutation();
 
   const areasWithTables = awt?.data
 
@@ -61,6 +64,27 @@ export default function OrderFlow() {
       };
     });
     setCart(preloaded);
+  };
+
+  // Print full customer bill (receipt)
+  const handlePrintBill = () => {
+    if (!orderId) return toast.error('No order to print');
+    const billItems = (currentOrder?.items && currentOrder.items.length > 0)
+      ? currentOrder.items
+      : cart.map(c => ({ name: c.name, qty: c.quantity, price: c.price }));
+    if (!billItems || billItems.length === 0) return toast.error('No items to print');
+
+    printBill({
+      orderId,
+      items: billItems,
+      subtotal,
+      tax,
+      total: currentOrder?.total ?? total,
+      user,
+      tableName: selectedTable?.name,
+      headerText: 'Test Header',
+      footerText: 'Test Footer',
+    });
   };
 
   useEffect(() => {
@@ -145,7 +169,6 @@ export default function OrderFlow() {
       toast.error('Cart is empty');
       return;
     }
-    console.log("cart", cart)
     try {
       const orderPayload = {
         restaurantId,
@@ -164,7 +187,13 @@ export default function OrderFlow() {
         total,
         status: 'pending',
         orderBy: user._id,
-        orderByType: 'Staff'
+        orderByType: 'Staff',
+        // Optional customer details (only include keys with values)
+        customer: {
+          ...(customer?.name ? { name: customer.name } : {}),
+          ...(customer?.phone ? { phone: customer.phone } : {}),
+          ...(customer?.address ? { address: customer.address } : {}),
+        },
       };
       const response = await createOrder(orderPayload).unwrap();
       setOrderId(response._id);
@@ -178,30 +207,51 @@ export default function OrderFlow() {
       // (Assumes RTK Query tags like ['Tables'] are set)
 
       // Stay in the same flow; jump to cart step to allow KOT/print
-      setStep(3);
+      setCart([])
+      refetchAreasWithTables();
+      setStep(1);
     } catch (error) {
       toast.error('Failed to create order');
     }
   };
 
-   //handle update menu items on the order 
-    const handleUpdateOrder = async () => {
-      if (cart.length === 0) {
-        toast.error('Cart is empty');
-        return;
-      }
-      if(!orderId){
-        toast.error('No order to update');
-        return;
-      }
-   console.log("updating order",orderId);
+  //handle update menu items on the order 
+  const handleUpdateOrder = async () => {
+    if (cart.length === 0) {
+      toast.error('Cart is empty');
+      return;
     }
-    
+    if (!orderId) {
+      toast.error('No order to update');
+      return;
+    }
+    try {
+      const body = {
+        items: cart.map(item => ({
+          _id: item?._id,
+          name: item.name,
+          qty: item.quantity,
+          price: item.price,
+          modifiers: item.modifiers,
+        })),
+        subtotal,
+        tax,
+        total,
+      };
+      const updated = await updateOrder({ orderId, body }).unwrap();
+      // Optionally sync local current order state
+      setCurrentOrder(prev => ({ ...(prev || {}), ...(updated || {}), items: body.items, subtotal: body.subtotal, tax: body.tax, total: body.total }));
+      toast.success('Order updated successfully');
+         window.refresh();
+    } catch (error) {
+      toast.error('Failed to update order');
+    }
+  }
+
 
   // Print KOT (simple demo; integrate with print lib)
   const handlePrintKOT = () => {
-    if (!orderId) return toast.error('No order to print');
-    // Fetch KOT details from kotData
+    if(!cart || cart.length === 0) return toast.error('No items in cart to print KOT');
     const kotItems = kotData?.items || cart;
     const printContent = `
       KOT for Order #${orderId}
@@ -234,15 +284,17 @@ export default function OrderFlow() {
     try {
       await addPayment({ id: orderId, method: 'cash', amount: total, status: 'paid' }).unwrap();
       await updateOrderStatus({ id: orderId, status: 'completed' }).unwrap();
-      await updateTable({ _id: selectedTable._id, status: 'free' }).unwrap();
+      await updateTable({ _id: selectedTable._id, status: 'available' }).unwrap();
       toast.success('Payment recorded. Order completed. Table is now available.');
       setCart([]);
       setOrderId('');
       setCurrentOrder(null);
       setSelectedTable(null);
       setStep(1);
+      refetchAreasWithTables();
     } catch (e) {
-      toast.error('Payment failed to record');
+      console.error(e);
+      // toast.error('Payment failed to record');
     }
   };
 
@@ -259,6 +311,16 @@ export default function OrderFlow() {
       </span>
     );
   };
+
+  const existingOrderDate = (createdAt) => {
+    const date = new Date(createdAt);
+    const year = date.toLocaleString('en-US', { year: 'numeric' });
+    const month = date.toLocaleString('en-US', { month: 'short' });
+    const day = date.toLocaleString('en-US', { day: '2-digit' });
+
+    const customFormattedDate = `${day}-${month}-${year}`;
+    return customFormattedDate;
+  }
 
   // Step 1: Table Selection
   if (step === 1) {
@@ -300,6 +362,26 @@ export default function OrderFlow() {
 
             {/* Areas & Tables */}
             <div className="space-y-6">
+              {isLoadingTables && (
+                <div key={"loading-carddd"} className="bg-white rounded-xl shadow-sm border border-gray-200">
+                 <div
+                    className="p-4 cursor-pointer hover:bg-gray-50 rounded-t-xl flex justify-between items-center"
+                  
+                  >
+                    <h2 className="text-xl font-semibold text-gray-900">Loading areas...</h2>
+                    <span className="text-sm text-gray-500">Tables: --</span>
+                  </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4">
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <div key={idx} className="p-4 rounded-lg border-2 bg-gray-50 animate-pulse">
+                      <div className="w-12 h-12 mx-auto mb-2 bg-gray-200 rounded-full" />
+                      <div className="h-3 bg-gray-200 rounded w-16 mx-auto mb-1" />
+                      <div className="h-2 bg-gray-200 rounded w-10 mx-auto" />
+                    </div>
+                  ))}
+                </div>
+                </div>
+              )}
               {areasWithTables && areasWithTables?.map((area) => (
                 <div key={area._id} className="bg-white rounded-xl shadow-sm border border-gray-200">
                   <div
@@ -327,10 +409,10 @@ export default function OrderFlow() {
                           }
                         }}
                         className={`p-4 rounded-lg border-2 transition-all ${selectedTable?._id === table._id
-                            ? 'border-blue-500 bg-blue-50 shadow-md'
-                            : table.status === 'occupied'
-                              ? 'border-red-500 bg-red-50 text-red-700'
-                              : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                          ? 'border-blue-500 bg-blue-50 shadow-md'
+                          : table.status === 'occupied'
+                            ? 'border-red-500 bg-red-50 text-red-700'
+                            : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
                           }`}
                         disabled={table.status === 'reserved'} // Optional
                       >
@@ -412,8 +494,8 @@ export default function OrderFlow() {
                   <button
                     onClick={() => setSelectedCategory('all')}
                     className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${selectedCategory === 'all'
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                        : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                      : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
                       }`}
                   >
                     <div className="w-2 h-2 rounded-full bg-blue-500"></div>
@@ -424,8 +506,8 @@ export default function OrderFlow() {
                       key={cat._id}
                       onClick={() => setSelectedCategory(cat._id)}
                       className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${selectedCategory === cat._id
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                          : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
+                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                        : 'hover:bg-gray-100 text-gray-700 border border-gray-200'
                         }`}
                     >
                       <div className="w-2 h-2 rounded-full bg-blue-500"></div>
@@ -441,13 +523,25 @@ export default function OrderFlow() {
                   <CheckCircleIcon className="h-5 w-5 text-green-600" />
                   Menu Items ({menuItems.length})
                 </h3>
+                {isLoadingMenu && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+                    {Array.from({ length: 8 }).map((_, idx) => (
+                      <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-100 animate-pulse">
+                        <div className="w-full h-32 bg-gray-200 rounded-lg mb-2" />
+                        <div className="h-3 bg-gray-200 rounded w-24 mb-2" />
+                        <div className="h-2 bg-gray-200 rounded w-32 mb-2" />
+                        <div className="h-4 bg-gray-200 rounded w-20" />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4  gap-4">
                   {menuItems.map((item) => {
                     const cartItem = cart.find(c => c.id === item._id);
                     return (
                       <div key={item._id} className="bg-gray-50 rounded-lg p-4 hover:shadow-md transition-all border border-gray-100">
                         <img
-                          src={item.imageUrl || '/images/No-Image-Placeholder.png'}
+                          src={item?.image || '/images/No-Image-Placeholder.png'}
                           alt={item.name}
                           className="w-full h-32 object-cover rounded-lg mb-2"
                         />
@@ -606,7 +700,8 @@ export default function OrderFlow() {
                 <div className="text-sm text-gray-600 mb-4">
                   <div>Order ID: <span className="font-medium text-gray-900">{orderId}</span></div>
                   <div>Status: <span className="font-medium capitalize">{currentOrder.status}</span></div>
-                  <div>Created: {new Date(currentOrder.createdAt).toLocaleString()}</div>
+                  {/* <div>Created: {new Date(currentOrder.createdAt).toLocaleString()}</div> */}
+                  <div>Order Date: {existingOrderDate(currentOrder.createdAt)}</div>
                 </div>
                 <ul className="divide-y">
                   {(currentOrder.items || []).map((i, idx) => (
@@ -642,8 +737,21 @@ export default function OrderFlow() {
                     </div>
                   </div>
                 )}
+                <hr className="border-t border-gray-300 my-4"></hr>
+                <div className="text-right">
+                  {/* <p className="text-sm text-gray-600">Subtotal: ₹{subtotal.toFixed(2)}</p> */}
+                  <p className="font-bold text-lg text-green-600">Total: ₹{currentOrder?.total.toFixed(2)}</p>
+                </div>
 
-                <div className="mt-6 flex justify-end">
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
+                  <button
+                    onClick={handlePrintBill}
+                    disabled={!orderId}
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white px-3 py-3 rounded-lg font-semibold hover:from-indigo-600 hover:to-indigo-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <PrinterIcon className="h-5 w-5" />
+                    Print Bill
+                  </button>
                   <button
                     onClick={handleTakeCashPayment}
                     disabled={isPaying || isUpdatingStatus}
@@ -662,6 +770,41 @@ export default function OrderFlow() {
                 <CreditCardIcon className="h-5 w-5 text-green-600" />
                 {currentOrder ? 'Add More Items' : `Cart Items (${cart.length})`}
               </h3>
+              {/* Optional Customer Details */}
+              {!currentOrder && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name (optional)</label>
+                    <input
+                      type="text"
+                      value={customer.name}
+                      onChange={(e) => setCustomer((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="John Doe"
+                      className="border rounded px-3 py-2 w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone (optional)</label>
+                    <input
+                      type="tel"
+                      value={customer.phone}
+                      onChange={(e) => setCustomer((prev) => ({ ...prev, phone: e.target.value }))}
+                      placeholder="9876543210"
+                      className="border rounded px-3 py-2 w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address (optional)</label>
+                    <input
+                      type="text"
+                      value={customer.address}
+                      onChange={(e) => setCustomer((prev) => ({ ...prev, address: e.target.value }))}
+                      placeholder="Apartment, Street, City"
+                      className="border rounded px-3 py-2 w-full"
+                    />
+                  </div>
+                </div>
+              )}
               {cart.length === 0 ? (
                 <div className="text-center py-8">
                   <TrashIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -748,10 +891,11 @@ export default function OrderFlow() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <button
                   onClick={handleCreateKOT}
-                  className="flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-3 rounded-lg font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all shadow-md"
+                  disabled={isCreatingKOT}
+                  className={`flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white py-3 rounded-lg font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all shadow-md ${isCreatingKOT ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
                   <PrinterIcon className="h-5 w-5" />
-                  New KOT
+                  {isCreatingKOT ? 'Creating KOT...' : 'New KOT'}
                 </button>
                 <button
                   onClick={handlePrintKOT}
@@ -761,15 +905,15 @@ export default function OrderFlow() {
                   <PrinterIcon className="h-5 w-5" />
                   Print KOT
                 </button>
-                
+
                 <button
-                  onClick={()=>orderId ? handleUpdateOrder() : handleCreateOrder()}
-                  disabled={cart.length === 0 || !selectedTable}
-                  className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 flex-1 ml-4"
+                  onClick={() => orderId ? handleUpdateOrder() : handleCreateOrder()}
+                  disabled={cart.length === 0 || !selectedTable || isCreatingOrder || isUpdatingOrder}
+                  className={`bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 flex-1 ml-4 ${isCreatingOrder || isUpdatingOrder ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
-                    {orderId ? 'Update Order' : 'Create Order'}
+                  {orderId ? (isUpdatingOrder ? 'Updating...' : 'Update Order') : (isCreatingOrder ? 'Creating...' : 'Create Order')}
                 </button>
-              
+
               </div>
 
               {/* KOT Preview (if order exists) */}
@@ -794,12 +938,12 @@ export default function OrderFlow() {
                   </div>
                   <span className="font-semibold text-gray-900">Total: ₹{total.toFixed(2)}</span>
                 </div>
-                 <button
-                  onClick={()=>orderId ? handleUpdateOrder() : handleCreateOrder()}
+                <button
+                  onClick={() => orderId ? handleUpdateOrder() : handleCreateOrder()}
                   disabled={cart.length === 0 || !selectedTable}
                   className="bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-600 hover:to-green-700 transition-all disabled:opacity-50 flex-1 ml-4"
                 >
-                    {orderId ? 'Update Order' : 'Create Order'}
+                  {orderId ? 'Update Order' : 'Create Order'}
                 </button>
               </div>
             </div>

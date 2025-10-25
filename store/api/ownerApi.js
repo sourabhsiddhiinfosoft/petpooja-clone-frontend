@@ -4,11 +4,12 @@ import { baseApi } from './baseApi';
 export const ownerApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     //dashboard
-    getOwnerDashboard: build.query({ query: () => ({ url: '/owner/dashboard', method: 'GET' }) }),
-    getOwnerDashboardSummary: build.query({ query: () => ({ url: '/owner/dashboard/summary', method: 'GET' }) }),
-    getOwnerRevenue: build.query({ query: (params) => ({ url: '/owner/dashboard/revenue', method: 'GET', params }) }),
-    getOwnerCustomerStats: build.query({ query: (params) => ({ url: '/owner/dashboard/customers', method: 'GET', params }) }),
-    getOwnerRecentOrders: build.query({ query: () => ({ url: '/owner/dashboard/recent-orders', method: 'GET' }) }),
+    // ✅ Main dashboard summary (cards + recent orders)
+    getOwnerDashboard: build.query({ query: () => ({ url: '/owner/dashboard', method: 'GET', }), }),
+    // ✅ Revenue chart (weekly / monthly / yearly)
+    getOwnerRevenue: build.query({ query: (params) => ({ url: '/owner/dashboard/revenue', method: 'GET', params, }), }),
+    // ✅ Customers chart (monthly / yearly)
+    getOwnerCustomerStats: build.query({ query: (params) => ({ url: '/owner/dashboard/customers', method: 'GET', params, }), }),
 
     //get restaurant details
     getRestaurantDetails: build.query({ query: (id) => ({ url: `/restaurants/${id}`, method: 'GET' }) }),
@@ -63,7 +64,7 @@ export const ownerApi = baseApi.injectEndpoints({
     getOrders: build.query({ query: () => ({ url: '/orders', method: 'GET' }), providesTags: ['Orders'] }),
     getOrderById: build.query({ query: (id) => ({ url: `/orders/${_id}`, method: 'GET' }), providesTags: (r, e, _id) => [{ type: 'Orders', _id }] }),
     updateOrderStatus: build.mutation({ query: ({ id, ...body }) => ({ url: `/orders/${id}/status`, method: 'PUT', body }), invalidatesTags: (r, e, { id }) => [{ type: 'Orders', id }] }),
-    addPayment: build.mutation({ query: ({ id, ...body }) => ({ url: `/orders/${id}/payments`, method: 'POST', body }), invalidatesTags: (r, e, { id }) => [{ type: 'Orders', id }] }),
+    addPayment: build.mutation({ query: ({ id, ...body }) => ({ url: `/orders/${id}/payments`, method: 'POST', body }), invalidatesTags: ['Orders', 'Areas', 'Tables'] }),
     updateOrder: build.mutation({ query: ({ orderId, body }) => ({ url: `/orders/${orderId}`, method: 'PUT', body, }), invalidatesTags: ['Orders', 'Tables', 'KOTs'], }),
 
     //KOT
@@ -71,6 +72,12 @@ export const ownerApi = baseApi.injectEndpoints({
     updateKOTStatus: build.mutation({ query: ({ kotId, ...body }) => ({ url: `/kots/${kotId}/status`, method: 'PUT', body, }), invalidatesTags: ['KOTs'], }),
     getKOTList: build.query({ query: (q) => ({ url: `/kots?${q}`, method: 'GET' }), providesTags: ['KOT'] }),
 
+    // Reports
+    getTopItemsReport: build.query({ query: (params) => ({ url: `/reports/top-items?${params}`, method: 'GET', }), providesTags: ['Reports'], }),
+    getCategoryReport: build.query({ query: (params) => ({ url: `/reports/categories?${params}`, method: 'GET', }), providesTags: ['Reports'], }),
+    getBranchReport: build.query({ query: (params) => ({ url: `/reports/branches?${params}`, method: 'GET', }), providesTags: ['Reports'], }),
+    getSalesReport: build.query({ query: ({ restaurantId, branchId, from, to }) => ({ url: `/reports/sales?restaurantId=${restaurantId}&branchId=${branchId}&from=${from}&to=${to}`, method: "GET", }), }),
+    getTopItems: build.query({ query: ({ restaurantId, branchId, from, to }) => ({ url: `/reports/top-items?restaurantId=${restaurantId}&branchId=${branchId}&from=${from}&to=${to}`, method: "GET", }), }),
   }),
 
 
@@ -78,10 +85,8 @@ export const ownerApi = baseApi.injectEndpoints({
 
 export const {
   useGetOwnerDashboardQuery,
-  useGetOwnerDashboardSummaryQuery,
   useGetOwnerRevenueQuery,
   useGetOwnerCustomerStatsQuery,
-  useGetOwnerRecentOrdersQuery,
   useGetRestaurantDetailsQuery,
   useUpdateRestaurantDetailsMutation,
   useGetCategoriesQuery,
@@ -117,11 +122,17 @@ export const {
   useGetOrdersQuery,
   useCreateOrderMutation,
   useGetOrderByIdQuery,
+  useUpdateOrderMutation,
   useGetKOTQuery,
   useUpdateOrderStatusMutation,
   useAddPaymentMutation,
   useUpdateKOTStatusMutation,
   useGetKOTListQuery,
+  useGetSalesReportQuery,
+  useGetTopItemsReportQuery,
+  useGetCategoryReportQuery,
+  useGetBranchReportQuery,
+  useGetTopItemsQuery
 } = ownerApi;
 
 

@@ -7,13 +7,19 @@ export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
     baseUrl: API_BASE_URL,
-    prepareHeaders: (headers) => {
+    prepareHeaders: (headers, { endpoint }) => {
       // Read token from cookies
       headers.set('Access-Control-Allow-Origin', '*'); // Allow all origins
       headers.set("Access-Control-Allow-Credentials", "true"); // Allow credentials
       const token = Cookies.get('token'); // Use your cookie name
       if (token) headers.set('authorization', `Bearer ${token}`);
-      // headers.set('Content-Type', 'application/json');
+      
+      // Don't set Content-Type for FormData - let browser set it with boundary
+      // Only set Content-Type for JSON requests
+      if (!headers.get('content-type') && !endpoint?.includes('FormData')) {
+        headers.set('Content-Type', 'application/json');
+      }
+      
       return headers;
     },
     credentials: 'include',
