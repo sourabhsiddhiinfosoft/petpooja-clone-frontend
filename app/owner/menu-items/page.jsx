@@ -6,13 +6,14 @@ import {
   useUpdateMenuItemMutation,
   useDeleteMenuItemMutation,
   useGetCategoriesQuery,
+  useGetInventoryQuery, // New: For inventory data
 } from '../../../store/api/ownerApi';
 import { ModalBox } from '../../../components/ModalBox';
 import toast from 'react-hot-toast';
 import { useMemo, useState } from 'react';
 import { TableLoading } from '../../../components/Loading/tableLoading';
 import Link from 'next/link';
-import { EyeIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, PencilSquareIcon, TrashIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
 import Select from 'react-select';
 import { darkStyles } from '../../../styles/darkmodeSelect';
@@ -37,6 +38,7 @@ export default function OwnerMenuItems() {
 
   const { data = [], isLoading, isError, refetch } = useGetMenuQuery(q, { skip: !restaurantId });
   const { data: categories = [] } = useGetCategoriesQuery(`${restaurantId}?branchId=${branchId}`, { skip: !restaurantId });
+  const { data: inventoryData = [] } = useGetInventoryQuery(q, { skip: !restaurantId || !branchId }); // New: Fetch inventory
 
   const [createMenuItem] = useAddMenuItemMutation();
   const [updateMenuItem] = useUpdateMenuItemMutation();
@@ -59,6 +61,7 @@ export default function OwnerMenuItems() {
     branchIds: [branchId],
     restaurantId,
     branchId,
+    ingredients: [], // New: Array of { inventoryItem: id, qty: number }
   });
 
   const itemsPerPage = 8; // Adjusted for cards
@@ -95,6 +98,14 @@ export default function OwnerMenuItems() {
     }));
   }, [branches]);
 
+  // New: Prepare options for React Select (inventory)
+  const inventoryOptions = useMemo(() => {
+    return inventoryData.map((inv) => ({
+      value: inv._id,
+      label: `${inv.name} (${inv.unit}) - Qty: ${inv.currentQuantity}`,
+    }));
+  }, [inventoryData]);
+
   // Updated handleOpen
   const handleOpen = (type, item) => {
     if (type === 'add') {
@@ -110,6 +121,7 @@ export default function OwnerMenuItems() {
         branchId,
         imageFile: null,
         previewUrl: '',
+        ingredients: [], // New
       });
     } else {
       setSelectedItem(item ? {
@@ -117,6 +129,7 @@ export default function OwnerMenuItems() {
         categoryId: item?.categoryId || '',
         branchIds: item.branchIds || [branchId],
         type: item.type || 'single',
+        ingredients: item.ingredients || [], // New
       } : null);
     }
     setModalType(type);
@@ -136,6 +149,7 @@ export default function OwnerMenuItems() {
       branchIds: branchId ? [branchId] : [],
       restaurantId,
       branchId,
+      ingredients: [], // New
     });
     setEditingImageId(null);
     setNewImageFile(null);
@@ -149,6 +163,40 @@ export default function OwnerMenuItems() {
       setNewItem((prev) => ({ ...prev, categoryId: categoryId }));
     } else {
       setSelectedItem((prev) => ({ ...prev, categoryId: categoryId }));
+    }
+  };
+
+  // New: Handle ingredient changes
+  const handleIngredientChange = (index, field, value) => {
+    if (modalType === 'add') {
+      const newIngredients = [...newItem.ingredients];
+      newIngredients[index] = { ...newIngredients[index], [field]: value };
+      setNewItem((prev) => ({ ...prev, ingredients: newIngredients }));
+    } else {
+      const newIngredients = [...selectedItem.ingredients];
+      newIngredients[index] = { ...newIngredients[index], [field]: value };
+      setSelectedItem((prev) => ({ ...prev, ingredients: newIngredients }));
+    }
+  };
+
+  // New: Add ingredient
+  const addIngredient = () => {
+    const newIngredient = { inventoryItem: '', qty: 1 };
+    if (modalType === 'add') {
+      setNewItem((prev) => ({ ...prev, ingredients: [...prev.ingredients, newIngredient] }));
+    } else {
+      setSelectedItem((prev) => ({ ...prev, ingredients: [...prev.ingredients, newIngredient] }));
+    }
+  };
+
+  // New: Remove ingredient
+  const removeIngredient = (index) => {
+    if (modalType === 'add') {
+      const newIngredients = newItem.ingredients.filter((_, i) => i !== index);
+      setNewItem((prev) => ({ ...prev, ingredients: newIngredients }));
+    } else {
+      const newIngredients = selectedItem.ingredients.filter((_, i) => i !== index);
+      setSelectedItem((prev) => ({ ...prev, ingredients: newIngredients }));
     }
   };
 
@@ -177,7 +225,7 @@ export default function OwnerMenuItems() {
     }
   };
 
-  // Updated handleUpdate
+  // Updated handleUpdate (include ingredients)
   const handleUpdate = async () => {
     if (!selectedItem?._id) return;
     try {
@@ -187,6 +235,7 @@ export default function OwnerMenuItems() {
         branchId,
         categoryId: selectedItem.categoryId,
         branchIds: selectedItem.type === 'all' ? [] : (selectedItem.branchIds || []),
+        ingredients: selectedItem.ingredients || [], // New
       };
       await updateMenuItem(updatedItem).unwrap();
       toast.success('Menu item updated successfully.');
@@ -200,7 +249,7 @@ export default function OwnerMenuItems() {
     }
   };
 
-  // Updated handleCreate
+  // Updated handleCreate (include ingredients)
   const handleCreate = async () => {
     try {
       const itemToCreate = {
@@ -209,6 +258,7 @@ export default function OwnerMenuItems() {
         branchId,
         categoryId: newItem?.categoryId,
         branchIds: newItem.type === 'all' ? [] : (newItem.branchIds || []),
+        ingredients: newItem.ingredients || [], // New
       };
       await createMenuItem(itemToCreate).unwrap();
       toast.success('Menu item added successfully.');
@@ -223,7 +273,7 @@ export default function OwnerMenuItems() {
     }
   };
 
-  // Updated handleConfirm
+  // Updated handleConfirm (add ingredient validation)
   const handleConfirm = async () => {
     if (modalType === 'delete') {
       if (selectedItem && selectedItem._id) {
@@ -243,6 +293,12 @@ export default function OwnerMenuItems() {
       toast.error('Please select at least one branch.');
       return;
     }
+    // New: Ingredient validation (optional, but recommended)
+    const currentIngredients = getFormValue('ingredients') || [];
+    // if (currentIngredients.length === 0) {
+    //   toast.error('Please add at least one ingredient.');
+    //   return;
+    // }
     if (modalType === 'edit') {
       if (selectedItem && selectedItem._id) {
         await handleUpdate();
@@ -388,7 +444,7 @@ export default function OwnerMenuItems() {
           </div>
         </div>
 
-        {/* Cards Grid */}
+             {/* Cards Grid */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           {isLoading && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -456,7 +512,7 @@ export default function OwnerMenuItems() {
             </>
           )}
 
-                    {/* Pagination */}
+          {/* Pagination */}
           <div className="flex justify-between items-center p-4 border-t bg-gray-50 mt-2">
             <p className="text-sm text-gray-600">
               Page {currentPage} of {totalPages}
@@ -512,6 +568,9 @@ export default function OwnerMenuItems() {
               </p>
               <p>
                 <b>Apply To:</b> {selectedItem?.type || 'N/A'} | <b>Branches:</b> {selectedItem?.branchIds?.length || 0}
+              </p>
+              <p>
+                <b>Ingredients:</b> {selectedItem?.ingredients?.length || 0} items
               </p>
               <p>
                 <b>Status:</b>{' '}
@@ -601,6 +660,53 @@ export default function OwnerMenuItems() {
                 />
                 Active
               </label>
+
+              <hr className="my-2" />
+
+              {/* Ingredients Section */}
+              <div className='mb-2'>
+                <label className="block mb-1 font-medium">Ingredients</label>
+                {getFormValue('ingredients')?.map((ing, idx) => (
+                  <div key={idx} className="flex items-center gap-2 mb-2 p-2 border rounded">
+                    <Select
+                      options={inventoryOptions}
+                      value={inventoryOptions.find((opt) => opt.value === ing.inventoryItem) || null}
+                      onChange={(selected) => handleIngredientChange(idx, 'inventoryItem', selected?.value || '')}
+                      placeholder="Select inventory item"
+                      className="flex-1"
+                      classNamePrefix="select"
+                      isSearchable={true}
+                      isClearable={true}
+                      styles={darkStyles}
+                    />
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={ing.qty}
+                      onChange={(e) => handleIngredientChange(idx, 'qty', parseFloat(e.target.value) || 0)}
+                      placeholder="Qty"
+                      className="border rounded px-2 py-1 w-20"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeIngredient(idx)}
+                      className="p-1 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addIngredient}
+                  className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 flex items-center gap-1"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  Add Ingredient
+                </button>
+              </div>
 
               <hr className="my-2" />
 

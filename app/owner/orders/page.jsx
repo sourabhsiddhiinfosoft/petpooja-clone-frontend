@@ -303,6 +303,17 @@ export default function OwnerOrders() {
                   </React.Fragment>
                 ))}
               </tbody>
+              {
+                paginatedData.length === 0 && (
+                  <tbody>
+                    <tr>
+                      <td colSpan="8" className="p-4 text-center text-gray-500">
+                        No orders found.
+                      </td>
+                    </tr>
+                  </tbody>
+                )
+              }
            
             </table>
           </div>

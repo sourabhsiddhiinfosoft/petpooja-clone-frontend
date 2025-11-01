@@ -46,11 +46,40 @@ export const ownerApi = baseApi.injectEndpoints({
     updateTable: build.mutation({ query: ({ _id, ...body }) => ({ url: `/tables/${_id}`, method: 'PUT', body }), invalidatesTags: ['Tables'], }),
     deleteTable: build.mutation({ query: (_id) => ({ url: `/tables/${_id}`, method: 'DELETE' }), invalidatesTags: ['Tables'], }),
 
-    // Inventory
-    addInventory: build.mutation({ query: (body) => ({ url: '/inventory', method: 'POST', body }), invalidatesTags: ['Inventory'] }),
-    getInventory: build.query({ query: () => ({ url: '/inventory', method: 'GET' }), providesTags: ['Inventory'] }),
-    updateInventory: build.mutation({ query: ({ id, ...body }) => ({ url: `/inventory/${id}`, method: 'PUT', body }), invalidatesTags: ['Inventory'] }),
-    deleteInventory: build.mutation({ query: (id) => ({ url: `/inventory/${id}`, method: 'DELETE' }), invalidatesTags: ['Inventory'] }),
+// Inventory API endpoints
+addInventory: build.mutation({
+  query: (body) => ({
+    url: '/inventory',
+    method: 'POST',
+    body, // body includes restaurantId & branchId
+  }),
+  invalidatesTags: ['Inventory'],
+}),
+
+getInventory: build.query({
+  query: (q) => ({
+    url: `/inventory?${q}`,
+    method: 'GET',
+  }),
+  providesTags: ['Inventory'],
+}),
+
+updateInventory: build.mutation({
+  query: ({ id, ...body }) => ({
+    url: `/inventory/${id}`,
+    method: 'PUT',
+    body, // must include branchId to ensure branch-based update
+  }),
+  invalidatesTags: ['Inventory'],
+}),
+
+deleteInventory: build.mutation({
+  query: ({ id, branchId }) => ({
+    url: `/inventory/${id}?branchId=${branchId}`,
+    method: 'DELETE',
+  }),
+  invalidatesTags: ['Inventory'],
+}),
 
     // Branches
     createBranch: build.mutation({ query: ({ restaurantId, ...body }) => ({ url: `/branches/restaurants/${restaurantId}/branches`, method: 'POST', body, }), invalidatesTags: ['Branches'], }),

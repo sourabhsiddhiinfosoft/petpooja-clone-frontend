@@ -212,7 +212,7 @@ export default function ReportsPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl shadow-lg">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
               <ChartBarIcon className="h-8 w-8 text-blue-600" />
               Reports Dashboard
             </h1>

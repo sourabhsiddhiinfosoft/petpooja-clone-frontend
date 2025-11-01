@@ -205,7 +205,7 @@ export default function AdminDashboardPage({ userType = "admin" }) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {summary.recentRestaurants.map((r) => (
                             <div key={r._id} className="bg-white rounded-lg shadow p-4 flex gap-4">
-                                <img src={r.logo} alt={r.name} className="w-16 h-16 object-cover rounded" />
+                                <img src={r.logo || "/images/No-Image-Placeholder.png"} alt={r.name} className="w-16 h-16 object-cover rounded" />
                                 <div>
                                     <div className="font-bold">{r.name}</div>
                                     <div className="text-gray-500 text-sm">

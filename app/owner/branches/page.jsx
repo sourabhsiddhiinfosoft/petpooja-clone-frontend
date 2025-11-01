@@ -155,7 +155,13 @@ const handleConfirm = async () => {
         </div>
         {isLoading ? (
           <TableLoading />
-        ) : (
+        ) : 
+        branches?.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-600">
+            No branches found. Click "Add Branch" to create one.
+          </div>
+        ) :
+         (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm text-gray-700">
@@ -163,7 +169,7 @@ const handleConfirm = async () => {
                   <tr>
                     <th className="px-4 py-2">Name</th>
                     <th className="px-4 py-2">City</th>
-                    <th className="px-4 py-2">Manager</th>
+                    {/* <th className="px-4 py-2">Manager</th> */}
                     <th className="px-4 py-2">Tables</th>
                     <th className="px-4 py-2">Status</th>
                     <th className="px-4 py-2">Actions</th>
@@ -176,14 +182,14 @@ const handleConfirm = async () => {
                       className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
                         } hover:bg-blue-50 transition`}
                     >
-                      <td className="p-3">{branch.name}</td>
-                      <td className="p-3">{branch.address?.city}</td>
-                      <td className="p-3">
+                      <td className="p-3 text-center">{branch.name}</td>
+                      <td className="p-3 text-center">{branch.address?.city || "N/A"}</td>
+                      {/* <td className="p-3">
                         {branch.manager?.name || "N/A"}
-                      </td>
-                      <td className="p-3">{branch.tables}</td>
-                      <td className="p-3">{branch.status}</td>
-                      <td className="p-3 flex gap-3">
+                      </td> */}
+                      <td className="p-3 text-center">{branch.tables}</td>
+                      <td className="p-3 text-center">{branch.status}</td>
+                      <td className="p-3 flex gap-3 justify-center">
                         <button
                           title="Edit"
                           className="p-2 rounded-full bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
@@ -244,7 +250,7 @@ const handleConfirm = async () => {
               <div>
                 <p><b>Name:</b> {selectedBranch.name || "N/A"}</p>
                 <p><b>City:</b> {selectedBranch.address?.city || "N/A"}</p>
-                <p><b>Manager:</b> {selectedBranch.manager?.name || "N/A"}</p>
+                {/* <p><b>Manager:</b> {selectedBranch.manager?.name || "N/A"}</p> */}
                 <p><b>Tables:</b> {selectedBranch.tables || "N/A"}</p>
                 <p><b>Status:</b> {selectedBranch.status || "N/A"}</p>
               </div>
@@ -392,7 +398,7 @@ const handleConfirm = async () => {
                   </div>
 
                   {/* Latitude */}
-                  <div>
+                  {/* <div>
                     <label className="block mb-1 font-medium">Latitude</label>
                     <input
                       type="number"
@@ -416,10 +422,10 @@ const handleConfirm = async () => {
                       className="border rounded px-3 py-2 w-full"
                       
                     />
-                  </div>
+                  </div> */}
 
                   {/* Longitude */}
-                  <div>
+                  {/* <div>
                     <label className="block mb-1 font-medium">Longitude</label>
                     <input
                       type="number"
@@ -443,10 +449,10 @@ const handleConfirm = async () => {
                       className="border rounded px-3 py-2 w-full"
                 
                     />
-                  </div>
+                  </div> */}
 
                   {/* Manager Name */}
-                  <div>
+                  {/* <div>
                     <label className="block mb-1 font-medium">Manager Name</label>
                     <input
                       type="text"
@@ -467,12 +473,12 @@ const handleConfirm = async () => {
                       }}
                       placeholder="Manager Name"
                       className="border rounded px-3 py-2 w-full"
-                      required
+                      
                     />
-                  </div>
+                  </div> */}
 
                   {/* Manager Phone */}
-                  <div>
+                  {/* <div>
                     <label className="block mb-1 font-medium">Manager Phone</label>
                     <input
                       type="tel"
@@ -493,12 +499,12 @@ const handleConfirm = async () => {
                       }}
                       placeholder="Manager Phone"
                       className="border rounded px-3 py-2 w-full"
-                      required
+                      
                     />
-                  </div>
+                  </div> */}
 
                   {/* Manager Email */}
-                  <div>
+                  {/* <div>
                     <label className="block mb-1 font-medium">Manager Email</label>
                     <input
                       type="email"
@@ -519,9 +525,9 @@ const handleConfirm = async () => {
                       }}
                       placeholder="Manager Email"
                       className="border rounded px-3 py-2 w-full"
-                      required
+                      
                     />
-                  </div>
+                  </div> */}
 
                   {/* Tables */}
                   <div>
@@ -533,7 +539,7 @@ const handleConfirm = async () => {
                       placeholder="Number of tables"
                       className="border rounded px-3 py-2 w-full"
                       min={0}
-                      required
+                      
                     />
                   </div>
                 </div>

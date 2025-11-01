@@ -12,7 +12,7 @@ export const adminApi = baseApi.injectEndpoints({
       providesTags: ['Restaurants'],
     }),
     getRestaurantById: build.query({
-      query: (_id) => ({ url: `/restaurants/${id}`, method: 'GET' }),
+      query: (id) => ({ url: `/restaurants/${id}`, method: 'GET' }),
       providesTags: (result, error, id) => [{ type: 'Restaurants', id }],
     }),
     createRestaurant: build.mutation({

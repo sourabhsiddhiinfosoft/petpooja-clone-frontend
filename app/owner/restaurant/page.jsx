@@ -106,33 +106,33 @@ export default function OwnerRestaurant() {
           {!editMode ? (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                <img
+                {/* <img
                   src={restaurantData?.logo}
                   alt={restaurantData?.name}
                   className="w-24 h-24 rounded object-cover border"
-                />
+                /> */}
                 <div>
                   <h2 className="text-xl font-semibold">{restaurantData?.name}</h2>
                   <p className="text-gray-600">{restaurantData?.description}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <p><strong>Slug:</strong> {restaurantData?.slug}</p>
-                <p><strong>City:</strong> {restaurantData?.city}</p>
-                <p><strong>State:</strong> {restaurantData?.state}</p>
-                <p><strong>Country:</strong> {restaurantData?.country}</p>
-                <p><strong>Address:</strong> {restaurantData?.address}</p>
-                <p><strong>Cuisine Type:</strong> {restaurantData?.cuisineType}</p>
-                <p><strong>GSTIN:</strong> {restaurantData?.GSTIN}</p>
-                <p><strong>FSSAI:</strong> {restaurantData?.FSSAI}</p>
+                {/* <p><strong>Slug:</strong> {restaurantData?.slug}</p> */}
+                <p><strong>City:</strong> {restaurantData?.city || "N/A"}</p>
+                <p><strong>State:</strong> {restaurantData?.state || "N/A"}</p>
+                <p><strong>Country:</strong> {restaurantData?.country|| "N/A"}</p>
+                <p><strong>Address:</strong> {restaurantData?.address|| "N/A"}</p>
+                <p><strong>Cuisine Type:</strong> {restaurantData?.cuisineType|| "N/A"}</p>
+                <p><strong>GSTIN:</strong> {restaurantData?.GSTIN|| "N/A"}</p>
+                <p><strong>FSSAI:</strong> {restaurantData?.FSSAI|| "N/A"}</p>
                 <p>
                   <strong>Status:</strong>{" "}
                   {restaurantData?.isActive ? "Active ✅" : "Inactive ❌"}
                 </p>
-                <p>
+                {/* <p>
                   <strong>Subscription:</strong>{" "}
                   {restaurantData?.subscriptionStatus ? "Subscribed" : "Not Subscribed"}
-                </p>
+                </p> */}
               </div>
             </div>
           ) : (

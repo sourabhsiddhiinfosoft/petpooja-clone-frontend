@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ModalBox } from "../../../components/ModalBox";
 import {
   useDeleteRestaurantMutation,
@@ -11,8 +12,10 @@ import DashboardLayout from "../../../components/DashboardLayout";
 import toast from "react-hot-toast";
 import { TableLoading } from "../../../components/Loading/tableLoading";
 import { EyeIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
+import Image from "next/image";
 
 export default function AdminRestaurants() {
+  const router = useRouter();
   const { data = [], isLoading, isError } = useGetRestaurantsQuery();
   const [updateRestaurant] = useUpdateRestaurantMutation();
   const [deleteRestaurant] = useDeleteRestaurantMutation();
@@ -44,27 +47,14 @@ export default function AdminRestaurants() {
 
   const handleOpen = (type, restaurant) => {
     if (type === "add") {
-      setSelectedRestaurant({
-        name: "",
-        slug: "",
-        city: "",
-        state: "",
-        country: "",
-        address: "",
-        cuisineType: "",
-        logo: "",
-        description: "",
-        GSTIN: "",
-        FSSAI: "",
-        isActive: true,
-        ownerName: "",
-        ownerEmail: "",
-        ownerPhone: "",
-        ownerPassword: "",
-      });
-    } else {
-      setSelectedRestaurant(restaurant ? { ...restaurant } : null);
+      router.push("/admin/restaurants/add");
+      return;
     }
+    if (type === "edit" && restaurant?._id) {
+      router.push(`/admin/restaurants/${restaurant._id}/edit`);
+      return;
+    }
+    setSelectedRestaurant(restaurant ? { ...restaurant } : null);
     setModalType(type);
   };
 
@@ -163,7 +153,7 @@ export default function AdminRestaurants() {
               <table className="min-w-full text-sm text-gray-700">
                 <thead className="bg-gray-100 text-gray-800 sticky top-0">
                   <tr>
-                    <th className="p-3 text-left">Logo</th>
+                    {/* <th className="p-3 text-left">Logo</th> */}
                     <th className="p-3 text-left">Name</th>
                     <th className="p-3 text-left">City</th>
                     <th className="p-3 text-left">Cuisine</th>
@@ -179,13 +169,16 @@ export default function AdminRestaurants() {
                       className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"
                         } hover:bg-blue-50 transition`}
                     >
-                      <td className="p-3">
-                        <img
-                          src={r.logo}
+                      {/* <td className="p-3">
+                        <Image
+                          src={r.logo || "/images/No-Image-Placeholder.png"}
                           alt={r.name}
                           className="w-10 h-10 rounded-md object-cover shadow-sm"
+                          // error={() => "/images/No-Image-Placeholder.png"}
+                          width={40}
+                          height={40}
                         />
-                      </td>
+                      </td> */}
                       <td className="p-3 font-medium">{r.name}</td>
                       <td className="p-3">{r.city}</td>
                       <td className="p-3">{r.cuisineType}</td>
@@ -260,28 +253,20 @@ export default function AdminRestaurants() {
           title={
             modalType === "view"
               ? "View Restaurant"
-              : modalType === "edit"
-                ? "Edit Restaurant"
-                : modalType === "add"
-                  ? "Add Restaurant"
-                  : "Delete Restaurant"
+              : modalType === "delete"
+                ? "Delete Restaurant"
+                : ""
           }
           onClose={handleClose}
-          onConfirm={modalType !== "view" ? handleConfirm : null}
-          confirmText={
-            modalType === "delete"
-              ? "Delete"
-              : modalType === "add"
-                ? "Add"
-                : "Save"
-          }
-          size={modalType === ("add" || "edit") ? "3xl" : "md"}
+          onConfirm={modalType === "delete" ? handleConfirm : null}
+          confirmText={modalType === "delete" ? "Delete" : undefined}
+          size={"md"}
         >
           {modalType === "view" && selectedRestaurant && (
             <div>
-              <p>
-                <img src={selectedRestaurant.logo} alt={selectedRestaurant.name} className="w-20 h-20 rounded-md object-cover shadow-sm" />
-              </p>
+              {/* <p>
+                <img src={selectedRestaurant.logo || "/images/No-image-Placeholder.png"} alt={selectedRestaurant.name} className="w-20 h-20 rounded-md object-cover shadow-sm" />
+              </p> */}
               <p>
                 <b>Name:</b> {selectedRestaurant?.name || "N/A"}
               </p>
@@ -305,213 +290,13 @@ export default function AdminRestaurants() {
                 <b>Address:</b> {selectedRestaurant?.address || "N/A"}
               </p>
               <p>
-                <b>Phone:</b> {selectedRestaurant?.phone || "N/A"}
+                <b>Phone:</b> {selectedRestaurant?.phone || selectedRestaurant?.owner?.phone || "N/A"}
               </p>
               {/* Add more fields as needed */}
             </div>
           )}
 
-          {(modalType === "edit" || modalType === "add") && selectedRestaurant && (
-            <form
-              className="space-y-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleConfirm();
-              }}
-            >
-              <label className="flex items-center gap-2 mb-2">
-                <input
-                  type="checkbox"
-                  checked={selectedRestaurant.isActive || false}
-                  onChange={(e) =>
-                    handleInputChange("isActive", e.target.checked)
-                  }
-                />
-                Active
-              </label>
-              <div className="max-h-[70vh] overflow-y-auto pr-2">
-                <div className="flex flex-col gap-3">
-                  {/* Row 1 */}
-                  <div className="flex flex-col md:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={selectedRestaurant.name || ""}
-                      onChange={(e) => handleInputChange("name", e.target.value)}
-                      placeholder="Name"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                      required
-                    />
-                    <input
-                      type="text"
-                      value={selectedRestaurant.slug || ""}
-                      onChange={(e) => handleInputChange("slug", e.target.value)}
-                      placeholder="Slug"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                      required
-                    />
-                  </div>
-                  {/* Row 2 */}
-                  <div className="flex flex-col md:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={selectedRestaurant.city || ""}
-                      onChange={(e) => handleInputChange("city", e.target.value)}
-                      placeholder="City"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                      required
-                    />
-                    <input
-                      type="text"
-                      value={selectedRestaurant.state || ""}
-                      onChange={(e) => handleInputChange("state", e.target.value)}
-                      placeholder="State"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                      required
-                    />
-                  </div>
-                  {/* Row 3 */}
-                  <div className="flex flex-col md:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={selectedRestaurant.country || ""}
-                      onChange={(e) => handleInputChange("country", e.target.value)}
-                      placeholder="Country"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                      required
-                    />
-                    <input
-                      type="text"
-                      value={selectedRestaurant.address || ""}
-                      onChange={(e) => handleInputChange("address", e.target.value)}
-                      placeholder="Address"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                      required
-                    />
-                  </div>
-                  {/* Row 4 */}
-                  <div className="flex flex-col md:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={selectedRestaurant.cuisineType || ""}
-                      onChange={(e) =>
-                        handleInputChange("cuisineType", e.target.value)
-                      }
-                      placeholder="Cuisine Type"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                      required
-                    />
-                    <input
-                      type="text"
-                      value={selectedRestaurant.logo || ""}
-                      onChange={(e) => handleInputChange("logo", e.target.value)}
-                      placeholder="Logo URL"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                    />
-                  </div>
-                  {/* Row 5 */}
-                  <div className="flex flex-col md:flex-row gap-3">
-                    <input
-                      type="text"
-                      value={selectedRestaurant.GSTIN || ""}
-                      onChange={(e) => handleInputChange("GSTIN", e.target.value)}
-                      placeholder="GSTIN"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                    />
-                    <input
-                      type="text"
-                      value={selectedRestaurant.FSSAI || ""}
-                      onChange={(e) => handleInputChange("FSSAI", e.target.value)}
-                      placeholder="FSSAI"
-                      className="border rounded px-3 py-2 w-full md:w-1/2"
-                    />
-                  </div>
-                  {/* Owner fields only for add */}
-                  {modalType === "add" && (
-                    <>
-                      <div className="flex flex-col md:flex-row gap-3">
-                        <input
-                          type="text"
-                          value={selectedRestaurant?.ownerName || ""}
-                          onChange={(e) =>
-                            handleInputChange("ownerName", e.target.value)
-                          }
-                          placeholder="Owner Name"
-                          className="border rounded px-3 py-2 w-full md:w-1/2"
-                          required
-                        />
-                        <input
-                          type="tel"
-                          value={selectedRestaurant.ownerPhone || ""}
-                          onChange={(e) =>
-                            handleInputChange("ownerPhone", e.target.value)
-                          }
-                          placeholder="Owner Phone"
-                          className="border rounded px-3 py-2 w-full md:w-1/2"
-                          required
-                        />
-                      </div>
-                      <div className="flex flex-col md:flex-row gap-3">
-                        <input
-                          type="email"
-                          value={selectedRestaurant.ownerEmail || ""}
-                          onChange={(e) =>
-                            handleInputChange("ownerEmail", e.target.value)
-                          }
-                          placeholder="Owner Email"
-                          className="border rounded px-3 py-2 w-full md:w-1/2"
-                          required
-                        />
-                        <div className="relative w-full md:w-1/2">
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            value={selectedRestaurant.ownerPassword || ""}
-                            onChange={(e) =>
-                              handleInputChange("ownerPassword", e.target.value)
-                            }
-                            placeholder="Owner Password"
-                            className="border rounded px-3 py-2 w-full pr-10"
-                            required={modalType === "add"}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword((s) => !s)}
-                            className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-200"
-                            tabIndex={-1}
-                          >
-                            {showPassword ? (
-                              // Eye-off icon
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
-                              </svg>
-                            ) : (
-                              // Eye icon
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                  {/* Description full width */}
-                  <textarea
-                    value={selectedRestaurant.description || ""}
-                    onChange={(e) =>
-                      handleInputChange("description", e.target.value)
-                    }
-                    placeholder="Description"
-                    className="border rounded px-3 py-2 w-full"
-                  />
-                </div>
-              </div>
-              {/* Hidden submit button to allow form submission on Enter */}
-              <button type="submit" className="hidden">
-                {modalType === "add" ? "Add" : "Save"}
-              </button>
-            </form>
-          )}
+          {/* Edit/Add moved to dedicated pages */}
 
           {modalType === "delete" && selectedRestaurant && (
             <p>

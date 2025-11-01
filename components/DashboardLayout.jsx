@@ -10,21 +10,28 @@ import BranchSelector from './BranchSelector';
 import { useMeQuery } from '../store/api/authApi';
 import { useCurrentBranch } from '../store/hooks/useCurrentBranch';
 
+// Import Heroicons
+import {
+  ChartBarIcon,
+  BuildingStorefrontIcon,
+  UserGroupIcon,
+  PresentationChartLineIcon,
+  UserIcon,
+  FolderIcon,
+  ClipboardDocumentListIcon,
+  CubeIcon,
+  TableCellsIcon,
+  MapIcon,
+  DocumentTextIcon,
+  CogIcon,
+} from '@heroicons/react/24/outline';
+
 const DashboardLayout = ({ children, userType }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const pathname = usePathname();
-  // const user = useSelector((state) => state.auth.user);
   const [modelActive, setModelActive] = useState(false);
-  // const { data: meData } = useMeQuery({skip: userType !== 'waiter' });
-  const { user} = useCurrentBranch();
-
-  
-  // useEffect(()=>{
-  // if(meData && Object.keys(meData).length > 0){
-  //     setUserData(meData);
-  // }
-  // },[meData,setUserData])
+  const { user } = useCurrentBranch();
 
   const dispatch = useDispatch();
 
@@ -33,66 +40,64 @@ const DashboardLayout = ({ children, userType }) => {
     setUserDropdownOpen(false);
   };
 
-  // Navigation items based on user type (RBAC)
+  // Navigation items based on user type (RBAC) - Updated with Heroicons
   const getNavigationItems = () => {
     if (userType === 'admin') {
       return [
-        { name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
+        { name: 'Dashboard', href: `/${userType}/dashboard`, icon: ChartBarIcon },
         { name: 'MANAGE', isHeader: true },
-        { name: 'Restaurants', href: `/${userType}/restaurants`, icon: '🏪' },
-        { name: 'Owners', href: `/${userType}/owners`, icon: '👤' },
-        // { name: 'Subscriptions', href: `/${userType}/subscriptions`, icon: '🔔' },
+        { name: 'Restaurants', href: `/${userType}/restaurants`, icon: BuildingStorefrontIcon },
+        { name: 'Owners', href: `/${userType}/owners`, icon: UserGroupIcon },
         { name: 'REPORTS', isHeader: true },
-        { name: 'Reports', href: `/${userType}/reports`, icon: '📈' },
+        { name: 'Reports', href: `/${userType}/reports`, icon: PresentationChartLineIcon },
       ];
     }
 
     if (userType === 'owner') {
       return [
-        { name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
+        { name: 'Dashboard', href: `/${userType}/dashboard`, icon: ChartBarIcon },
         { name: 'RESTAURANT', isHeader: true },
-        { name: 'Restaurant Details', href: `/${userType}/restaurant`, icon: '🏪' },
-        { name: 'Branches', href: `/${userType}/branches`, icon: '🏪' },
-        { name: 'Profile', href: `/${userType}/profile`, icon: '🏷️' },
-        { name: 'Categories', href: `/${userType}/categories`, icon: '🗂️' },
-        { name: 'Menu Items', href: `/${userType}/menu-items`, icon: '🍽️' },
-        { name: 'Tables', href: `/${userType}/tables`, icon: '🪑' },
-        { name: 'Areas', href: `/${userType}/areas`, icon: '🗺️' },
+        { name: 'Restaurant Details', href: `/${userType}/restaurant`, icon: BuildingStorefrontIcon },
+        { name: 'Branches', href: `/${userType}/branches`, icon: BuildingStorefrontIcon },
+        { name: 'Profile', href: `/${userType}/profile`, icon: UserIcon },
+        { name: 'Categories', href: `/${userType}/categories`, icon: FolderIcon },
+        { name: 'Menu Items', href: `/${userType}/menu-items`, icon: ClipboardDocumentListIcon },
+        { name: 'Inventory', href: `/${userType}/inventory`, icon: CubeIcon },
+        { name: 'Tables', href: `/${userType}/tables`, icon: TableCellsIcon },
+        { name: 'Areas', href: `/${userType}/areas`, icon: MapIcon },
         { name: 'ORDER MANAGEMENT', isHeader: true },
-        // { name: 'Take Order', href: `/${userType}/takeOrder`, icon: '🧾' },
-        { name: 'Take Order', href: `/${userType}/orderFlowNew`, icon: '🧾' },
-        { name: 'Orders', href: `/${userType}/orders`, icon: '🧾' },
+        { name: 'Take Order', href: `/${userType}/takeOrder`, icon: DocumentTextIcon },
+        { name: 'Orders', href: `/${userType}/orders`, icon: DocumentTextIcon },
         { name: 'STAFF', isHeader: true },
-        { name: 'Staff', href: `/${userType}/staff`, icon: '👷' },
+        { name: 'Staff', href: `/${userType}/staff`, icon: UserGroupIcon },
         { name: 'REPORTS', isHeader: true },
-        { name: 'Reports', href: `/${userType}/reports`, icon: '📈' },
-        { name: 'Settings', href: `/${userType}/settings`, icon: '⚙️' },
+        { name: 'Reports', href: `/${userType}/reports`, icon: PresentationChartLineIcon },
+        { name: 'Settings', href: `/${userType}/settings`, icon: CogIcon },
       ];
     }
 
     // staff waiter
-    if(userType === 'waiter'){
-    return [
-      { name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
-      { name: 'SERVICE', isHeader: true },
-      { name: 'Take Order', href: `/${userType}/takeOrder`, icon: '🪑' },
-      {name:"Kots",href:`/${userType}/runningKOTs`,icon:'🧾'},
-      { name: 'Running Tables', href: `/${userType}/runningTables`, icon: '🪑' },
-      { name: 'Orders', href: `/${userType}/orders`, icon: '🧾' },
-      // { name: 'Bills', href: `/${userType}/bills`, icon: '💵' },
-    ];
-    }
-
-    if(userType === 'chef'){
+    if (userType === 'waiter') {
       return [
-      { name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
-      { name: 'KOTs', href: `/${userType}/runningKOTs`, icon: '🧾' },
-      ]
+        { name: 'Dashboard', href: `/${userType}/dashboard`, icon: ChartBarIcon },
+        { name: 'SERVICE', isHeader: true },
+        { name: 'Take Order', href: `/${userType}/takeOrder`, icon: TableCellsIcon },
+        { name: 'Kots', href: `/${userType}/runningKOTs`, icon: DocumentTextIcon },
+        { name: 'Running Tables', href: `/${userType}/runningTables`, icon: TableCellsIcon },
+        { name: 'Orders', href: `/${userType}/orders`, icon: DocumentTextIcon },
+      ];
     }
 
-    return[
-      {name: 'Dashboard', href: `/${userType}/dashboard`, icon: '📊' },
-    ]
+    if (userType === 'chef') {
+      return [
+        { name: 'Dashboard', href: `/${userType}/dashboard`, icon: ChartBarIcon },
+        { name: 'KOTs', href: `/${userType}/runningKOTs`, icon: DocumentTextIcon },
+      ];
+    }
+
+    return [
+      { name: 'Dashboard', href: `/${userType}/dashboard`, icon: ChartBarIcon },
+    ];
   };
 
   const navigationItems = getNavigationItems();
@@ -105,11 +110,9 @@ const DashboardLayout = ({ children, userType }) => {
   };
 
   let ProfileName = user && user?.name
-  .split(" ")
-  .map(word => word.charAt(0).toUpperCase())
-  .join("");
-
-  // let ProfileName = userType && userType.split(" ").map(word => word.charAt(0).toUpperCase()).join("");
+    .split(" ")
+    .map(word => word.charAt(0).toUpperCase())
+    .join("");
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -166,7 +169,7 @@ const DashboardLayout = ({ children, userType }) => {
                       }`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <span className="text-lg">{item.icon}</span>
+                    <item.icon className="w-5 h-5" />
                     {item.name}
                   </Link>
                 </li>
@@ -189,29 +192,11 @@ const DashboardLayout = ({ children, userType }) => {
                 </svg>
               </button>
               <div className={`${userType != "owner" ? "hidden" : "" }`}>
-
                 <BranchSelector className="w-64" />
               </div>
-              
             </div>
 
             <div className="flex items-center gap-4">
-              {/* Language selector 
-              <div className="hidden md:flex items-center gap-2">
-                <span className="text-sm text-slate-600">English</span>
-                <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRkZGRkZGIi8+CjxyZWN0IHdpZHRoPSIyNCIgaGVpZ2h0PSIxMiIgZmlsbD0iIzAwMDA3RiIvPgo8cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMyIgZmlsbD0iI0ZGMDAwMCIvPgo8cmVjdCB5PSI5IiB3aWR0aD0iMjQiIGhlaWdodD0iMyIgZmlsbD0iI0ZGMDAwMCIvPgo8cmVjdCB5PSIxOCIgd2lkdGg9IjI0IiBoZWlnaHQ9IjMiIGZpbGw9IiNGRjAwMDAiLz4KPHJlY3QgeT0iMjEiIHdpZHRoPSIyNCIgaGVpZ2h0PSIzIiBmaWxsPSIjRkYwMDAwIi8+Cjwvc3ZnPgo=" alt="US Flag" className="w-4 h-4" />
-                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-*/}
-              {/* Notifications 
-              <button className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5-5-5h5v-5a7.5 7.5 0 1 0-15 0v5h5l-5 5-5-5h5v-5a7.5 7.5 0 1 1 15 0v5z" />
-                </svg>
-              </button>
-*/}
               {/* User dropdown */}
               <div className="relative">
                 {

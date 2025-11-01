@@ -35,7 +35,7 @@ export default function OrderFlow() {
   // APIs
   const { data: awt = [], isLoading: isLoadingTables } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
   const { data: categories = [] } = useGetCategoriesQuery(`${restaurantId}?branchId=${branchId}`, { skip: !restaurantId });
-  const { data: menuItems = [], isLoading: isLoadingMenu } = useGetMenuQuery(`${restaurantId}&branchId=${branchId}&categoryId=${selectedCategory === 'all' ? 0 : selectedCategory}`, { skip: !restaurantId && !selectedCategory });
+  const { data: menuItems = [], isLoading: isLoadingMenu } = useGetMenuQuery(`${restaurantId}&branchId=${branchId}&categoryId=${selectedCategory === 'all' ? "" : selectedCategory}`, { skip: !restaurantId && !selectedCategory });
   const { data: kotData } = useGetKOTQuery(orderId, { skip: !orderId });
   const [createOrder, { isLoading: isCreatingOrder }] = useCreateOrderMutation();
   const [updateTable] = useUpdateTableMutation();
