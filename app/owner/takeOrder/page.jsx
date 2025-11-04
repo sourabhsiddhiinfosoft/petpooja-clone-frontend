@@ -114,9 +114,9 @@ export default function OrderFlow() {
   // };
 
     const addToCart = (item) => {
-      const existing = cart.find(c => c.id === item._id);
+      const existing = cart.find(c => c._id === item._id);
       if (existing) {
-        setCart(cart.map(c => c.id === item._id ? { ...c, quantity: c.quantity + 1, subtotal: (c.price * (c.quantity + 1)) } : c));
+        setCart(cart.map(c => c._id === item._id ? { ...c, quantity: c.quantity + 1, subtotal: (c.price * (c.quantity + 1)) } : c));
       } else {
         setCart([...cart, { ...item, quantity: 1, subtotal: item.price, modifiers: [] }]);
       }
@@ -139,7 +139,7 @@ export default function OrderFlow() {
   // Update quantity
   const updateQuantity = (id, delta) => {
     setCart(cart.map(c => {
-      if (c.id === id) {
+      if (c._id === id) {
         const newQty = Math.max(0, c.quantity + delta);
         return newQty > 0 ? { ...c, quantity: newQty, subtotal: c.price * newQty } : null;
       }
@@ -209,7 +209,7 @@ export default function OrderFlow() {
         total,
         status: 'pending',
         orderBy: user._id,
-        orderByType: 'Staff',
+        orderByType: 'Owner',
         // Optional customer details (only include keys with values)
         customer: {
           ...(customer?.name ? { name: customer.name } : {}),
@@ -221,7 +221,7 @@ export default function OrderFlow() {
       setOrderId(response._id);
 
       // Update table status to occupied
-      await updateTable({ _id: selectedTable._id, status: 'occupied' }).unwrap();
+      // await updateTable({ _id: selectedTable._id, status: 'occupied' }).unwrap();
 
       toast.success('Order created successfully!');
 
@@ -263,9 +263,12 @@ export default function OrderFlow() {
       };
       const updated = await updateOrder({ orderId, body }).unwrap();
       // Optionally sync local current order state
-      setCurrentOrder(prev => ({ ...(prev || {}), ...(updated || {}), items: body.items, subtotal: body.subtotal, tax: body.tax, total: body.total }));
+      // setCurrentOrder(prev => ({ ...(prev || {}), ...(updated || {}), items: body.items, subtotal: body.subtotal, tax: body.tax, total: body.total }));
       toast.success('Order updated successfully');
-         window.refresh();
+      setCart([])
+      setStep(1)
+      setSelectedTable(null)
+      refetchAreasWithTables();
     } catch (error) {
       toast.error('Failed to update order');
     }
@@ -406,7 +409,7 @@ export default function OrderFlow() {
                 </div>
               )}
               {areasWithTables && areasWithTables?.map((area) => (
-                <div key={area._id} className="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div key={`area-tables-${area._id}`} className="bg-white rounded-xl shadow-sm border border-gray-200">
                   <div
                     className="p-4 cursor-pointer hover:bg-gray-50 rounded-t-xl flex justify-between items-center"
                     onClick={() => { }} // Collapsible if needed
@@ -417,7 +420,7 @@ export default function OrderFlow() {
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4">
                     {area.tables.map((table) => (
                       <button
-                        key={table._id}
+                        key={`tables-${table._id}`}
                         onClick={() => {
                           setSelectedTable(table);
                           // If table is occupied and has a current order, go to Cart directly
@@ -526,7 +529,7 @@ export default function OrderFlow() {
                   </button>
                   {categories.map((cat) => (
                     <button
-                      key={cat._id}
+                      key={`cat-${cat._id}`}
                       onClick={() => setSelectedCategory(cat._id)}
                       className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${selectedCategory === cat._id
                         ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
@@ -549,7 +552,7 @@ export default function OrderFlow() {
                 {isLoadingMenu && (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
                     {Array.from({ length: 8 }).map((_, idx) => (
-                      <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-100 animate-pulse">
+                      <div key={`menu-itemss${idx}`} className="bg-gray-50 rounded-lg p-4 border border-gray-100 animate-pulse">
                         <div className="w-full h-32 bg-gray-200 rounded-lg mb-2" />
                         <div className="h-3 bg-gray-200 rounded w-24 mb-2" />
                         <div className="h-2 bg-gray-200 rounded w-32 mb-2" />
@@ -845,7 +848,7 @@ export default function OrderFlow() {
                     <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition">
                       <div className="flex items-center gap-3 flex-1">
                         <img
-                          src={item.imageUrl || '/images/No-Image-Placeholder.png'}
+                          src={item.image || '/images/No-Image-Placeholder.png'}
                           alt={item.name}
                           className="w-16 h-16 object-cover rounded-lg"
                         />

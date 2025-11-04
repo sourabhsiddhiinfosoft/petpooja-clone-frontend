@@ -1,7 +1,8 @@
 "use client"
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import DashboardLayout from "../../../components/DashboardLayout";
 import { TableLoading } from "../../../components/Loading/tableLoading";
+import { useNotifications } from "../../../contexts/NotificationContext";
 
 import { PencilSquareIcon, EyeIcon,ChevronDownIcon,ChevronUpIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useCreateOrderMutation, useGetOrdersQuery, useUpdateOrderStatusMutation } from "../../../store/api/ownerApi";
@@ -12,9 +13,22 @@ import { formatDateToDDMMYY } from "../../../lib/dateConvertion";
 export default function OwnerOrders() {
   const [search, setSearch] = useState("");
   const { data: ordersData, isLoading, isError, refetch } = useGetOrdersQuery();
+  const { addNotificationHandler } = useNotifications();
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+
+  // Handle real-time notifications - auto-refresh when KOT status is updated or new KOT is created
+  useEffect(() => {
+    const unsubscribe = addNotificationHandler((notification) => {
+      if (notification.type === 'kot_status_updated' || notification.type === 'kot_created') {
+        // Auto-refresh orders list when KOT status changes or new KOT is created
+        refetch();
+      }
+    });
+
+    return unsubscribe;
+  }, [addNotificationHandler, refetch]);
 
   // Modal state
   const [modalType, setModalType] = useState(null);
@@ -226,7 +240,7 @@ export default function OwnerOrders() {
                       className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} hover:bg-blue-50 transition cursor-pointer`}
                       onClick={() => toggleAccordion(order._id)}
                     >
-                      <td className="p-3">{order._id}</td>
+                      <td className="p-3">{order.orderNumber || order._id}</td>
                       <td className="p-3 font-medium">{order?.tableId?.name}</td>
                       <td className="p-3">{order?.type}</td>
                       <td className="p-3">{order?.status}</td>

@@ -1,9 +1,10 @@
 "use client";
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
 import DashboardLayout from '../../../components/DashboardLayout';
 import { TableLoading } from '../../../components/Loading/tableLoading';
 import toast from 'react-hot-toast';
+import { useNotifications } from '../../../contexts/NotificationContext';
 import { 
     MagnifyingGlassCircleIcon as SearchIcon, 
   FunnelIcon, 
@@ -22,13 +23,26 @@ export default function OwnerKOTs() {
   // Build query string
   const q = `${restaurantId ? `restaurantId=${restaurantId}` : ''}${branchId ? `&branchId=${branchId}` : ''}`;
   
-  const { data: kots = [], isLoading, isError } = useGetKOTListQuery(q, { skip: !restaurantId });
+  const { data: kots = [], isLoading, isError, refetch } = useGetKOTListQuery(q, { skip: !restaurantId });
+  const { addNotificationHandler } = useNotifications();
   
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'preparing', 'ready'
   const [currentPage, setCurrentPage] = useState(1);
   
   const itemsPerPage = 6; // Adjust for card grid
+
+  // Handle real-time notifications - auto-refresh when KOT status is updated
+  useEffect(() => {
+    const unsubscribe = addNotificationHandler((notification) => {
+      if (notification.type === 'kot_status_updated') {
+        // Auto-refresh KOT list when status changes
+        refetch();
+      }
+    });
+
+    return unsubscribe;
+  }, [addNotificationHandler, refetch]);
 
   // Filter KOTs (client-side: search + status)
   const filteredKots = useMemo(() => {

@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
 import { 
   useGetKOTListQuery, 
@@ -8,6 +8,7 @@ import {
 import DashboardLayout from '../../../components/DashboardLayout';
 import { TableLoading } from '../../../components/Loading/tableLoading';
 import toast from 'react-hot-toast';
+import { useNotifications } from '../../../contexts/NotificationContext';
 import { 
   MagnifyingGlassCircleIcon as SearchIcon, 
   FunnelIcon, 
@@ -30,6 +31,7 @@ export default function ChefKOTs() {
 
   const { data: kots = [], isLoading, isError, refetch } = useGetKOTListQuery(q, { skip: !restaurantId });
   const [updateKOTStatus] = useUpdateKOTStatusMutation();
+  const { addNotificationHandler } = useNotifications();
   
   const [activeTab, setActiveTab] = useState('latest'); // 'latest' | 'today'
   const [search, setSearch] = useState('');
@@ -37,6 +39,20 @@ export default function ChefKOTs() {
   const [currentPage, setCurrentPage] = useState({ latest: 1, today: 1 }); // Per tab
   
   const itemsPerPage = 6;
+
+  // Handle real-time notifications - auto-refresh when new KOT is created
+  useEffect(() => {
+    const unsubscribe = addNotificationHandler((notification) => {
+      if (notification.type === 'kot_created') {
+        // Auto-refresh KOT list when new KOT is created
+        refetch();
+        // Optional: Show a more specific toast
+        toast.success(`New KOT received: ${notification.message}`);
+      }
+    });
+
+    return unsubscribe;
+  }, [addNotificationHandler, refetch]);
 
   // Filter KOTs based on tab
   const filteredKots = useMemo(() => {
@@ -318,7 +334,10 @@ export default function ChefKOTs() {
                           </div>
                           {/* Optional Print Button */}
                           <button
-                            onClick={() => handlePrintKOT(kot._id)}
+                            onClick={() => {
+                              // Print functionality can be implemented here
+                              toast.info('Print functionality coming soon');
+                            }}
                             className="mt-3 w-full bg-gradient-to-r from-gray-500 to-gray-600 text-white py-2 rounded-lg font-semibold hover:from-gray-600 hover:to-gray-700 transition-all flex items-center justify-center gap-2 text-sm"
                           >
                             <PrinterIcon className="h-4 w-4" />

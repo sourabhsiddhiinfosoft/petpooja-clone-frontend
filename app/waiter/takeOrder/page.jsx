@@ -18,12 +18,14 @@ import DashboardLayout from '../../../components/DashboardLayout';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
 import { useCreateOrderMutation, useGetAreasWithTablesQuery, useUpdateOrderStatusMutation, useAddPaymentMutation, useGetCategoriesQuery, useGetMenuQuery, useUpdateTableMutation, useUpdateOrderMutation } from '../../../store/api/ownerApi';
 import { useCreateKOTMutation, useGetKOTQuery, useUpdateKOTStatusMutation } from '../../../store/api/staffApi';
+import { printBill } from '../../../lib/printBill';
+import InventoryWarning from '../../../components/InventoryWarning';
 
 export default function OrderFlow() {
   const router = useRouter();
   const { user } = useCurrentBranch();
   const restaurantId = user?.restaurantId || '';
-  const branchId = user?.branchId || '';
+  const branchId = user?._id || '';
 
   const [step, setStep] = useState(1);
   const [selectedTable, setSelectedTable] = useState(null);
@@ -31,9 +33,12 @@ export default function OrderFlow() {
   const [cart, setCart] = useState([]); // { id, name, price, quantity, modifiers, subtotal }
   const [orderId, setOrderId] = useState(''); // For occupied table pre-load
   const [currentOrder, setCurrentOrder] = useState(null); // For occupied table pre-load
+  const [customer, setCustomer] = useState({ name: '', phone: '', address: '' }); // Optional customer details
+  const [showInventoryWarning, setShowInventoryWarning] = useState(false);
+  const [selectedMenuItem, setSelectedMenuItem] = useState(null);
 
   // APIs
-  const { data: awt = [], isLoading: isLoadingTables } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
+  const { data: awt = [], isLoading: isLoadingTables,refetch: refetchAreasWithTables } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
   const { data: categories = [] } = useGetCategoriesQuery(`${restaurantId}?branchId=${branchId}`, { skip: !restaurantId });
   const { data: menuItems = [], isLoading: isLoadingMenu } = useGetMenuQuery(`${restaurantId}&branchId=${branchId}&categoryId=${selectedCategory === 'all' ? "" : selectedCategory}`, { skip: !restaurantId && !selectedCategory });
   const { data: kotData } = useGetKOTQuery(orderId, { skip: !orderId });
@@ -67,101 +72,22 @@ export default function OrderFlow() {
   // Print full customer bill (receipt)
   const handlePrintBill = () => {
     if (!orderId) return toast.error('No order to print');
-    const billItems = (currentOrder?.items && currentOrder.items.length > 0) ? currentOrder.items : cart.map(c => ({ name: c.name, qty: c.quantity, price: c.price }));
+    const billItems = (currentOrder?.items && currentOrder.items.length > 0)
+      ? currentOrder.items
+      : cart.map(c => ({ name: c.name, qty: c.quantity, price: c.price }));
     if (!billItems || billItems.length === 0) return toast.error('No items to print');
 
-    const now = new Date();
-    const formattedDate = now.toLocaleDateString();
-    const formattedTime = now.toLocaleTimeString();
-    const cashierName = user?.name || user?.email || 'Cashier';
-    const billNo = orderId?.slice(-6).toUpperCase();
-
-    const subtotalStr = subtotal.toFixed(2);
-    const cgst = (tax / 2).toFixed(2);
-    const sgst = (tax / 2).toFixed(2);
-    const totalStr = selectedTable?.currentOrder?.total.toFixed(2);
-
-    const rowsHtml = billItems
-      .map(i => {
-        const lineTotal = (i.price * i.qty).toFixed(2);
-        return `
-          <tr>
-            <td class="text">${i.name}</td>
-            <td class="num">${i.qty}</td>
-            <td class="num">${Number(i.price).toFixed(2)}</td>
-            <td class="num">${lineTotal}</td>
-          </tr>`;
-      })
-      .join('');
-
-    const html = `
-      <html>
-      <head>
-        <meta charset="utf-8" />
-        <title>Bill #${billNo}</title>
-        <style>
-          * { box-sizing: border-box; }
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; }
-          .receipt { width: 280px; padding: 10px 12px; }
-          .center { text-align: center; }
-          .muted { color: #555; font-size: 11px; }
-          hr { border: 0; border-top: 1px dashed #ccc; margin: 8px 0; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { font-size: 12px; padding: 4px 0; }
-          th { text-align: left; border-bottom: 1px solid #000; }
-          .num { text-align: right; }
-          .text { max-width: 140px; }
-          .title { font-weight: 700; font-size: 13px; }
-          .total { font-weight: 700; font-size: 14px; }
-        </style>
-      </head>
-      <body>
-        <div class="receipt">
-          <div class="center title">Test Header</div>
-          <div class="muted" style="margin-top:6px">
-            Name: <br/>
-            Date: ${formattedDate} ${formattedTime}<br/>
-            Cashier: ${cashierName} &nbsp;&nbsp; Bill No.: ${billNo}
-          </div>
-          <hr/>
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th class="num">Qty</th>
-                <th class="num">Price</th>
-                <th class="num">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-          <hr/>
-          <table>
-            <tbody>
-              <tr><td>Total Qty:</td><td class="num" colspan="3">${billItems.reduce((s, i) => s + Number(i.qty), 0)}</td></tr>
-              <tr><td>Sub Total</td><td class="num" colspan="3">${subtotalStr}</td></tr>
-              <tr><td>CGST</td><td class="num" colspan="3">${cgst}</td></tr>
-              <tr><td>SGST</td><td class="num" colspan="3">${sgst}</td></tr>
-            </tbody>
-          </table>
-          <hr/>
-          <div class="total">Grand Total  ₹ ${totalStr}</div>
-          <hr/>
-          <div class="center muted">Test Footer</div>
-        </div>
-        <script>
-          window.onload = function(){ window.print(); setTimeout(()=>window.close(), 300); };
-        </script>
-      </body>
-      </html>
-    `;
-
-    const w = window.open('', '_blank', 'width=360,height=600');
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
+    printBill({
+      orderId,
+      items: billItems,
+      subtotal,
+      tax,
+      total: currentOrder?.total ?? total,
+      user,
+      tableName: selectedTable?.name,
+      headerText: 'Restaurant Bill',
+      footerText: 'Thank you for dining with us!',
+    });
   };
 
   useEffect(() => {
@@ -180,8 +106,25 @@ export default function OrderFlow() {
   const tax = subtotal * 0;
   const total = subtotal + tax;
 
-  // Add to cart
-  const addToCart = (item) => {
+  // Add to cart with inventory check
+  // const addToCart = (item) => {
+  //   // Check inventory before adding (simplified check)
+  //   setSelectedMenuItem(item);
+  //   setShowInventoryWarning(true);
+  // };
+
+    const addToCart = (item) => {
+      const existing = cart.find(c => c._id === item._id);
+      if (existing) {
+        setCart(cart.map(c => c._id === item._id ? { ...c, quantity: c.quantity + 1, subtotal: (c.price * (c.quantity + 1)) } : c));
+      } else {
+        setCart([...cart, { ...item, quantity: 1, subtotal: item.price, modifiers: [] }]);
+      }
+      toast.success(`${item.name} added to cart`);
+    };
+
+  // Actually add to cart (called after inventory warning)
+  const confirmAddToCart = (item) => {
     const existing = cart.find(c => c.id === item._id);
     if (existing) {
       setCart(cart.map(c => c.id === item._id ? { ...c, quantity: c.quantity + 1, subtotal: (c.price * (c.quantity + 1)) } : c));
@@ -189,12 +132,14 @@ export default function OrderFlow() {
       setCart([...cart, { ...item, quantity: 1, subtotal: item.price, modifiers: [] }]);
     }
     toast.success(`${item.name} added to cart`);
+    setShowInventoryWarning(false);
+    setSelectedMenuItem(null);
   };
 
   // Update quantity
   const updateQuantity = (id, delta) => {
     setCart(cart.map(c => {
-      if (c.id === id) {
+      if (c._id === id) {
         const newQty = Math.max(0, c.quantity + delta);
         return newQty > 0 ? { ...c, quantity: newQty, subtotal: c.price * newQty } : null;
       }
@@ -264,23 +209,30 @@ export default function OrderFlow() {
         total,
         status: 'pending',
         orderBy: user._id,
-        orderByType: 'Staff'
+        orderByType: 'Staff',
+        // Optional customer details (only include keys with values)
+        customer: {
+          ...(customer?.name ? { name: customer.name } : {}),
+          ...(customer?.phone ? { phone: customer.phone } : {}),
+          ...(customer?.address ? { address: customer.address } : {}),
+        },
       };
       const response = await createOrder(orderPayload).unwrap();
       setOrderId(response._id);
 
       // Update table status to occupied
-      await updateTable({ _id: selectedTable._id, status: 'occupied' }).unwrap();
+      // await updateTable({ _id: selectedTable._id, status: 'occupied' }).unwrap();
 
       toast.success('Order created successfully!');
 
       // Invalidate queries to refetch updated tables
       // (Assumes RTK Query tags like ['Tables'] are set)
 
-      setCart([])
       // Stay in the same flow; jump to cart step to allow KOT/print
-      // setStep(3);
-         window.refresh();
+      setCart([])
+      refetchAreasWithTables();
+      setSelectedTable(null)
+      setStep(1);
     } catch (error) {
       toast.error('Failed to create order');
     }
@@ -311,9 +263,12 @@ export default function OrderFlow() {
       };
       const updated = await updateOrder({ orderId, body }).unwrap();
       // Optionally sync local current order state
-      setCurrentOrder(prev => ({ ...(prev || {}), ...(updated || {}), items: body.items, subtotal: body.subtotal, tax: body.tax, total: body.total }));
+      // setCurrentOrder(prev => ({ ...(prev || {}), ...(updated || {}), items: body.items, subtotal: body.subtotal, tax: body.tax, total: body.total }));
       toast.success('Order updated successfully');
-         window.refresh();
+      setCart([])
+      setStep(1)
+      setSelectedTable(null)
+      refetchAreasWithTables();
     } catch (error) {
       toast.error('Failed to update order');
     }
@@ -322,8 +277,7 @@ export default function OrderFlow() {
 
   // Print KOT (simple demo; integrate with print lib)
   const handlePrintKOT = () => {
-    if (!orderId) return toast.error('No order to print');
-    // Fetch KOT details from kotData
+    if(!cart || cart.length === 0) return toast.error('No items in cart to print KOT');
     const kotItems = kotData?.items || cart;
     const printContent = `
       KOT for Order #${orderId}
@@ -354,7 +308,7 @@ export default function OrderFlow() {
   const handleTakeCashPayment = async () => {
     if (!orderId || !selectedTable) return toast.error('No order selected');
     try {
-      await addPayment({ id: orderId, method: 'cash', amount: currentOrder?.total, status: 'paid' }).unwrap();
+      await addPayment({ id: orderId, method: 'cash', amount: total, status: 'paid' }).unwrap();
       await updateOrderStatus({ id: orderId, status: 'completed' }).unwrap();
       await updateTable({ _id: selectedTable._id, status: 'available' }).unwrap();
       toast.success('Payment recorded. Order completed. Table is now available.');
@@ -363,9 +317,10 @@ export default function OrderFlow() {
       setCurrentOrder(null);
       setSelectedTable(null);
       setStep(1);
-      window.refresh();
+      refetchAreasWithTables();
     } catch (e) {
-      toast.error('Payment failed to record');
+      console.error(e);
+      // toast.error('Payment failed to record');
     }
   };
 
@@ -454,7 +409,7 @@ export default function OrderFlow() {
                 </div>
               )}
               {areasWithTables && areasWithTables?.map((area) => (
-                <div key={area._id} className="bg-white rounded-xl shadow-sm border border-gray-200">
+                <div key={`area-tables-${area._id}`} className="bg-white rounded-xl shadow-sm border border-gray-200">
                   <div
                     className="p-4 cursor-pointer hover:bg-gray-50 rounded-t-xl flex justify-between items-center"
                     onClick={() => { }} // Collapsible if needed
@@ -465,7 +420,7 @@ export default function OrderFlow() {
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4">
                     {area.tables.map((table) => (
                       <button
-                        key={table._id}
+                        key={`tables-${table._id}`}
                         onClick={() => {
                           setSelectedTable(table);
                           // If table is occupied and has a current order, go to Cart directly
@@ -574,7 +529,7 @@ export default function OrderFlow() {
                   </button>
                   {categories.map((cat) => (
                     <button
-                      key={cat._id}
+                      key={`cat-${cat._id}`}
                       onClick={() => setSelectedCategory(cat._id)}
                       className={`w-full text-left p-3 rounded-lg transition-all flex items-center gap-3 ${selectedCategory === cat._id
                         ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
@@ -597,7 +552,7 @@ export default function OrderFlow() {
                 {isLoadingMenu && (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
                     {Array.from({ length: 8 }).map((_, idx) => (
-                      <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-100 animate-pulse">
+                      <div key={`menu-itemss${idx}`} className="bg-gray-50 rounded-lg p-4 border border-gray-100 animate-pulse">
                         <div className="w-full h-32 bg-gray-200 rounded-lg mb-2" />
                         <div className="h-3 bg-gray-200 rounded w-24 mb-2" />
                         <div className="h-2 bg-gray-200 rounded w-32 mb-2" />
@@ -612,7 +567,7 @@ export default function OrderFlow() {
                     return (
                       <div key={item._id} className="bg-gray-50 rounded-lg p-4 hover:shadow-md transition-all border border-gray-100">
                         <img
-                          src={item.imageUrl || '/images/No-Image-Placeholder.png'}
+                          src={item?.image || '/images/No-Image-Placeholder.png'}
                           alt={item.name}
                           className="w-full h-32 object-cover rounded-lg mb-2"
                         />
@@ -808,7 +763,7 @@ export default function OrderFlow() {
                     </div>
                   </div>
                 )}
-                <hr class="border-t border-gray-300 my-4"></hr>
+                <hr className="border-t border-gray-300 my-4"></hr>
                 <div className="text-right">
                   {/* <p className="text-sm text-gray-600">Subtotal: ₹{subtotal.toFixed(2)}</p> */}
                   <p className="font-bold text-lg text-green-600">Total: ₹{currentOrder?.total.toFixed(2)}</p>
@@ -841,6 +796,41 @@ export default function OrderFlow() {
                 <CreditCardIcon className="h-5 w-5 text-green-600" />
                 {currentOrder ? 'Add More Items' : `Cart Items (${cart.length})`}
               </h3>
+              {/* Optional Customer Details */}
+              {!currentOrder && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Customer Name (optional)</label>
+                    <input
+                      type="text"
+                      value={customer.name}
+                      onChange={(e) => setCustomer((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="John Doe"
+                      className="border rounded px-3 py-2 w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone (optional)</label>
+                    <input
+                      type="tel"
+                      value={customer.phone}
+                      onChange={(e) => setCustomer((prev) => ({ ...prev, phone: e.target.value }))}
+                      placeholder="9876543210"
+                      className="border rounded px-3 py-2 w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Address (optional)</label>
+                    <input
+                      type="text"
+                      value={customer.address}
+                      onChange={(e) => setCustomer((prev) => ({ ...prev, address: e.target.value }))}
+                      placeholder="Apartment, Street, City"
+                      className="border rounded px-3 py-2 w-full"
+                    />
+                  </div>
+                </div>
+              )}
               {cart.length === 0 ? (
                 <div className="text-center py-8">
                   <TrashIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -858,7 +848,7 @@ export default function OrderFlow() {
                     <div key={item.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition">
                       <div className="flex items-center gap-3 flex-1">
                         <img
-                          src={item.imageUrl || '/images/No-Image-Placeholder.png'}
+                          src={item.image || '/images/No-Image-Placeholder.png'}
                           alt={item.name}
                           className="w-16 h-16 object-cover rounded-lg"
                         />
@@ -1004,5 +994,21 @@ export default function OrderFlow() {
         </div>
       </div>
     </DashboardLayout>
+  );
+
+  // Inventory Warning Modal
+  return (
+    <>
+      {showInventoryWarning && selectedMenuItem && (
+        <InventoryWarning
+          menuItem={selectedMenuItem}
+          onClose={() => {
+            setShowInventoryWarning(false);
+            setSelectedMenuItem(null);
+          }}
+          onConfirm={() => confirmAddToCart(selectedMenuItem)}
+        />
+      )}
+    </>
   );
 }
