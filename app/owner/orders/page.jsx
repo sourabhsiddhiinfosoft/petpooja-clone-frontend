@@ -21,6 +21,7 @@ export default function OwnerOrders() {
   // Handle real-time notifications - auto-refresh when KOT status is updated or new KOT is created
   useEffect(() => {
     const unsubscribe = addNotificationHandler((notification) => {
+      console.log('OwnerOrders: Received notification', notification);
       if (notification.type === 'kot_status_updated' || notification.type === 'kot_created') {
         // Auto-refresh orders list when KOT status changes or new KOT is created
         refetch();

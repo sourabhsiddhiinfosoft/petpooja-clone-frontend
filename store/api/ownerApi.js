@@ -46,40 +46,40 @@ export const ownerApi = baseApi.injectEndpoints({
     updateTable: build.mutation({ query: ({ _id, ...body }) => ({ url: `/tables/${_id}`, method: 'PUT', body }), invalidatesTags: ['Tables'], }),
     deleteTable: build.mutation({ query: (_id) => ({ url: `/tables/${_id}`, method: 'DELETE' }), invalidatesTags: ['Tables'], }),
 
-// Inventory API endpoints
-addInventory: build.mutation({
-  query: (body) => ({
-    url: '/inventory',
-    method: 'POST',
-    body, // body includes restaurantId & branchId
-  }),
-  invalidatesTags: ['Inventory'],
-}),
+    // Inventory API endpoints
+    addInventory: build.mutation({
+      query: (body) => ({
+        url: '/inventory',
+        method: 'POST',
+        body, // body includes restaurantId & branchId
+      }),
+      invalidatesTags: ['Inventory'],
+    }),
 
-getInventory: build.query({
-  query: (q) => ({
-    url: `/inventory?${q}`,
-    method: 'GET',
-  }),
-  providesTags: ['Inventory'],
-}),
+    getInventory: build.query({
+      query: (q) => ({
+        url: `/inventory?${q}`,
+        method: 'GET',
+      }),
+      providesTags: ['Inventory'],
+    }),
 
-updateInventory: build.mutation({
-  query: ({ id, ...body }) => ({
-    url: `/inventory/${id}`,
-    method: 'PUT',
-    body, // must include branchId to ensure branch-based update
-  }),
-  invalidatesTags: ['Inventory'],
-}),
+    updateInventory: build.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/inventory/${id}`,
+        method: 'PUT',
+        body, // must include branchId to ensure branch-based update
+      }),
+      invalidatesTags: ['Inventory'],
+    }),
 
-deleteInventory: build.mutation({
-  query: ({ id, branchId }) => ({
-    url: `/inventory/${id}?branchId=${branchId}`,
-    method: 'DELETE',
-  }),
-  invalidatesTags: ['Inventory'],
-}),
+    deleteInventory: build.mutation({
+      query: ({ id, branchId }) => ({
+        url: `/inventory/${id}?branchId=${branchId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Inventory'],
+    }),
 
     // Branches
     createBranch: build.mutation({ query: ({ restaurantId, ...body }) => ({ url: `/branches/restaurants/${restaurantId}/branches`, method: 'POST', body, }), invalidatesTags: ['Branches'], }),
@@ -96,6 +96,10 @@ deleteInventory: build.mutation({
     addPayment: build.mutation({ query: ({ id, ...body }) => ({ url: `/orders/${id}/payments`, method: 'POST', body }), invalidatesTags: ['Orders', 'Areas', 'Tables'] }),
     updateOrder: build.mutation({ query: ({ orderId, body }) => ({ url: `/orders/${orderId}`, method: 'PUT', body, }), invalidatesTags: ['Orders', 'Tables', 'KOTs'], }),
 
+    //merge -tables order
+
+    // Add to your API slice
+    mergeTables: build.mutation({ query: (data) => ({ url: '/orders/merge-tables', method: 'POST', body: data, }), invalidatesTags: ['Orders', 'Tables'], }),
     //KOT
     getKOT: build.query({ query: () => ({ url: '/kot', method: 'GET' }), providesTags: ['KOT'] }),
     updateKOTStatus: build.mutation({ query: ({ kotId, ...body }) => ({ url: `/kots/${kotId}/status`, method: 'PUT', body, }), invalidatesTags: ['KOTs'], }),
@@ -107,9 +111,38 @@ deleteInventory: build.mutation({
     getBranchReport: build.query({ query: (params) => ({ url: `/reports/branches?${params}`, method: 'GET', }), providesTags: ['Reports'], }),
     getSalesReport: build.query({ query: ({ restaurantId, branchId, from, to }) => ({ url: `/reports/sales?restaurantId=${restaurantId}&branchId=${branchId}&from=${from}&to=${to}`, method: "GET", }), }),
     getTopItems: build.query({ query: ({ restaurantId, branchId, from, to }) => ({ url: `/reports/top-items?restaurantId=${restaurantId}&branchId=${branchId}&from=${from}&to=${to}`, method: "GET", }), }),
+
+    // Discount APIs
+    getDiscounts: build.query({ query: (q) => ({ url: `/discounts?${q}`, method: "GET" }), providesTags: ["Discounts"], }),
+    addDiscount: build.mutation({ query: (body) => ({ url: `/discounts`, method: "POST", body }), invalidatesTags: ["Discounts"], }),
+    updateDiscount: build.mutation({ query: ({ id, ...body }) => ({ url: `/discounts/${id}`, method: "PUT", body }), invalidatesTags: ["Discounts"], }),
+    deleteDiscount: build.mutation({ query: (id) => ({ url: `/discounts/${id}`, method: "DELETE" }), invalidatesTags: ["Discounts"], }),
+    applyDiscount: build.mutation({ query: (body) => ({ url: '/discounts/apply', method: 'POST', body }), invalidatesTags: ['Orders', 'Discounts'], }),
+    removeDiscount: build.mutation({ query: (body) => ({ url: '/discounts/remove', method: 'POST', body }), invalidatesTags: ['Orders', 'Discounts'], }),
+
+    // Support
+    createTicket: build.mutation({ query: (body) => ({ url: "/support", method: "POST", body }) }),
+    getTickets: build.query({ query: (filters) => ({ url: "/support", params: filters }) }),
+    getTicket: build.query({ query: (id) => `/support/${id}` }),
+    updateTicket: build.mutation({ query: ({ id, ...body }) => ({ url: `/support/${id}`, method: "PUT", body }) }),
+    addMessage: build.mutation({ query: ({ id, ...body }) => ({ url: `/support/${id}/message`, method: "POST", body }) }),
+
+    // Settings
+    getUserSettings: build.query({ query: (userId) => ({ url: `/settings/user/${userId}`, method: "GET" }), providesTags: ['Settings'] }),
+    updateUserSettings: build.mutation({ query: ({ userId, ...body }) => ({ url: `/settings/user/${userId}`, method: "PUT", body }), invalidatesTags: ['Settings'] }),
+    getRestaurantSettings: build.query({ query: (restaurantId) => `/settings/restaurant/${restaurantId}`, providesTags: ['Settings'] }),
+    updateRestaurantSettings: build.mutation({ query: ({ restaurantId, ...body }) => ({ url: `/settings/restaurant/${restaurantId}`, method: "PUT", body }), invalidatesTags: ['Settings'] }),
+
+    //test notification
+    testNotification: build.mutation({
+      query: (body) => ({
+        url: '/orders/test-notification',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['Orders'],
+    }),
   }),
-
-
 });
 
 export const {
@@ -152,6 +185,7 @@ export const {
   useCreateOrderMutation,
   useGetOrderByIdQuery,
   useUpdateOrderMutation,
+  useMergeTablesMutation,
   useGetKOTQuery,
   useUpdateOrderStatusMutation,
   useAddPaymentMutation,
@@ -161,7 +195,25 @@ export const {
   useGetTopItemsReportQuery,
   useGetCategoryReportQuery,
   useGetBranchReportQuery,
-  useGetTopItemsQuery
+  useGetTopItemsQuery,
+  useGetDiscountsQuery,
+  useAddDiscountMutation,
+  useUpdateDiscountMutation,
+  useDeleteDiscountMutation,
+  useApplyDiscountMutation,
+  useRemoveDiscountMutation,
+  useCreateTicketMutation,
+  useGetTicketsQuery,
+  useGetTicketQuery,
+  useUpdateTicketMutation,
+  useAddMessageMutation,
+  useGetUserSettingsQuery,
+  useUpdateUserSettingsMutation,
+  useGetRestaurantSettingsQuery,
+  useUpdateRestaurantSettingsMutation,
+
+  useTestNotificationMutation,
+
 } = ownerApi;
 
 

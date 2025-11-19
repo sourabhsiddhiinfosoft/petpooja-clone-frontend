@@ -20,12 +20,13 @@ import { useCreateOrderMutation, useGetAreasWithTablesQuery, useUpdateOrderStatu
 import { useCreateKOTMutation, useGetKOTQuery, useUpdateKOTStatusMutation } from '../../../store/api/staffApi';
 import { printBill } from '../../../lib/printBill';
 import InventoryWarning from '../../../components/InventoryWarning';
+import ApplyDiscountSection from '../../../components/ApplyDiscountSection';
 
 export default function OrderFlow() {
   const router = useRouter();
   const { user } = useCurrentBranch();
   const restaurantId = user?.restaurantId || '';
-  const branchId = user?._id || '';
+  const branchId = user?.branchId || '';
 
   const [step, setStep] = useState(1);
   const [selectedTable, setSelectedTable] = useState(null);
@@ -38,7 +39,7 @@ export default function OrderFlow() {
   const [selectedMenuItem, setSelectedMenuItem] = useState(null);
 
   // APIs
-  const { data: awt = [], isLoading: isLoadingTables,refetch: refetchAreasWithTables } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
+  const { data: awt = [], isLoading: isLoadingTables, refetch: refetchAreasWithTables } = useGetAreasWithTablesQuery(branchId, { skip: !branchId });
   const { data: categories = [] } = useGetCategoriesQuery(`${restaurantId}?branchId=${branchId}`, { skip: !restaurantId });
   const { data: menuItems = [], isLoading: isLoadingMenu } = useGetMenuQuery(`${restaurantId}&branchId=${branchId}&categoryId=${selectedCategory === 'all' ? "" : selectedCategory}`, { skip: !restaurantId && !selectedCategory });
   const { data: kotData } = useGetKOTQuery(orderId, { skip: !orderId });
@@ -85,8 +86,8 @@ export default function OrderFlow() {
       total: currentOrder?.total ?? total,
       user,
       tableName: selectedTable?.name,
-      headerText: 'Restaurant Bill',
-      footerText: 'Thank you for dining with us!',
+      headerText: 'Test Header',
+      footerText: 'Test Footer',
     });
   };
 
@@ -113,15 +114,15 @@ export default function OrderFlow() {
   //   setShowInventoryWarning(true);
   // };
 
-    const addToCart = (item) => {
-      const existing = cart.find(c => c._id === item._id);
-      if (existing) {
-        setCart(cart.map(c => c._id === item._id ? { ...c, quantity: c.quantity + 1, subtotal: (c.price * (c.quantity + 1)) } : c));
-      } else {
-        setCart([...cart, { ...item, quantity: 1, subtotal: item.price, modifiers: [] }]);
-      }
-      toast.success(`${item.name} added to cart`);
-    };
+  const addToCart = (item) => {
+    const existing = cart.find(c => c._id === item._id);
+    if (existing) {
+      setCart(cart.map(c => c._id === item._id ? { ...c, quantity: c.quantity + 1, subtotal: (c.price * (c.quantity + 1)) } : c));
+    } else {
+      setCart([...cart, { ...item, quantity: 1, subtotal: item.price, modifiers: [] }]);
+    }
+    toast.success(`${item.name} added to cart`);
+  };
 
   // Actually add to cart (called after inventory warning)
   const confirmAddToCart = (item) => {
@@ -209,7 +210,7 @@ export default function OrderFlow() {
         total,
         status: 'pending',
         orderBy: user._id,
-        orderByType: 'Staff',
+        orderByType: 'Owner',
         // Optional customer details (only include keys with values)
         customer: {
           ...(customer?.name ? { name: customer.name } : {}),
@@ -277,7 +278,7 @@ export default function OrderFlow() {
 
   // Print KOT (simple demo; integrate with print lib)
   const handlePrintKOT = () => {
-    if(!cart || cart.length === 0) return toast.error('No items in cart to print KOT');
+    if (!cart || cart.length === 0) return toast.error('No items in cart to print KOT');
     const kotItems = kotData?.items || cart;
     const printContent = `
       KOT for Order #${orderId}
@@ -390,22 +391,22 @@ export default function OrderFlow() {
             <div className="space-y-6">
               {isLoadingTables && (
                 <div key={"loading-carddd"} className="bg-white rounded-xl shadow-sm border border-gray-200">
-                 <div
+                  <div
                     className="p-4 cursor-pointer hover:bg-gray-50 rounded-t-xl flex justify-between items-center"
-                  
+
                   >
                     <h2 className="text-xl font-semibold text-gray-900">Loading areas...</h2>
                     <span className="text-sm text-gray-500">Tables: --</span>
                   </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4">
-                  {Array.from({ length: 5 }).map((_, idx) => (
-                    <div key={idx} className="p-4 rounded-lg border-2 bg-gray-50 animate-pulse">
-                      <div className="w-12 h-12 mx-auto mb-2 bg-gray-200 rounded-full" />
-                      <div className="h-3 bg-gray-200 rounded w-16 mx-auto mb-1" />
-                      <div className="h-2 bg-gray-200 rounded w-10 mx-auto" />
-                    </div>
-                  ))}
-                </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 p-4">
+                    {Array.from({ length: 5 }).map((_, idx) => (
+                      <div key={idx} className="p-4 rounded-lg border-2 bg-gray-50 animate-pulse">
+                        <div className="w-12 h-12 mx-auto mb-2 bg-gray-200 rounded-full" />
+                        <div className="h-3 bg-gray-200 rounded w-16 mx-auto mb-1" />
+                        <div className="h-2 bg-gray-200 rounded w-10 mx-auto" />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               {areasWithTables && areasWithTables?.map((area) => (
@@ -768,8 +769,21 @@ export default function OrderFlow() {
                   {/* <p className="text-sm text-gray-600">Subtotal: ₹{subtotal.toFixed(2)}</p> */}
                   <p className="font-bold text-lg text-green-600">Total: ₹{currentOrder?.total.toFixed(2)}</p>
                 </div>
+                <div className='flex justify-end mt-3'>
+                    <ApplyDiscountSection
+                      orderId={currentOrder?._id}
+                      branchId={branchId}
+                      currentOrder={currentOrder}
+                      onOrderUpdate={setCurrentOrder}  // Callback to update local state
+                    />
+                </div>
 
                 <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-end">
+                  <div>
+                    {/* <ApplyDiscountSection orderId={currentOrder?._id} branchId={branchId} /> */}
+                  
+
+                  </div>
                   <button
                     onClick={handlePrintBill}
                     disabled={!orderId}

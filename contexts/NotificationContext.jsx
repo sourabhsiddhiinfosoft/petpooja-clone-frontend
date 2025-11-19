@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { useSelector } from 'react-redux';
 import socketService from '../lib/socketService';
 import Cookies from 'js-cookie';
+import { useCurrentBranch } from '../store/hooks/useCurrentBranch';
 
 const NotificationContext = createContext(null);
 
@@ -17,7 +18,7 @@ export function NotificationProvider({ children }) {
   const [connectionError, setConnectionError] = useState(null);
   const authUser = useSelector((state) => state.auth?.user);
   const branchUser = useSelector((state) => state.branch?.user);
-  
+  const {currentBranch} = useCurrentBranch();
   // Use refs to avoid stale closures
   const userRef = useRef(null);
   const notificationsHandlersRef = useRef([]);
@@ -25,6 +26,7 @@ export function NotificationProvider({ children }) {
   // Update user ref when auth or branch user changes
   useEffect(() => {
     const currentUser = branchUser || authUser;
+    console.log('NotificationProvider==>>> Updating user ref', currentUser);
     userRef.current = currentUser;
   }, [authUser, branchUser]);
 
@@ -32,6 +34,7 @@ export function NotificationProvider({ children }) {
    * Add notification handler
    */
   const addNotificationHandler = useCallback((handler) => {
+    console.log('NotificationProvider==>>> Adding notification handler');
     notificationsHandlersRef.current.push(handler);
     return () => {
       notificationsHandlersRef.current = notificationsHandlersRef.current.filter(h => h !== handler);
@@ -51,8 +54,8 @@ export function NotificationProvider({ children }) {
     }
 
     const userData = {
-      restaurantId: user.restaurantId || Cookies.get('restaurantId'),
-      branchId: user.branchId,
+      restaurantId: user?.restaurantId || Cookies.get('restaurantId'),
+      branchId: user?.branchId || currentBranch?._id || Cookies.get('branchId'),
       role: user.role || Cookies.get('role'),
     };
 
@@ -60,6 +63,12 @@ export function NotificationProvider({ children }) {
       console.warn('NotificationProvider: Cannot connect - missing restaurantId');
       return;
     }
+
+         if (!userData.restaurantId || !userData.branchId) {
+       console.error('==> Missing restaurantId or branchId for socket connection');
+       return;
+     }
+     
 
     socketService.connect(
       userData,
@@ -97,12 +106,13 @@ export function NotificationProvider({ children }) {
     const user = branchUser || authUser;
     const token = Cookies.get('token');
     
-    if (token && user && user.restaurantId) {
+    if (token && user && user.restaurantId && (user?.branchId || currentBranch?._id)) {
+ 
       connect();
       
       // Set up event listeners
       const handleKOTCreated = (data) => {
-        console.log('NotificationProvider: KOT created', data);
+        console.log('==>NotificationProvider: KOT created', data);
         const notification = {
           id: `kot_created_${Date.now()}_${Math.random()}`,
           type: 'kot_created',
@@ -125,11 +135,13 @@ export function NotificationProvider({ children }) {
       };
 
       const handleKOTStatusUpdated = (data) => {
-        console.log('NotificationProvider: KOT status updated', data);
+        console.log('==>NotificationProvider: KOT status updated', data);
         const statusMessages = {
           pending: 'Pending',
           preparing: 'Preparing',
           ready: 'Ready',
+          cancelled: 'Cancelled',
+          served: 'Served',
         };
         
         const notification = {
@@ -153,18 +165,27 @@ export function NotificationProvider({ children }) {
         });
       };
 
+      
+        const handleTestPing = (data) => {
+        console.log('Test ping received:', data);
+        toast.success(`Ping from ${data.fromRole}: ${data.message}`);
+      };
+
       // Subscribe to events - socketService.on handles connection check
       socketService.on('kot:created', handleKOTCreated);
       socketService.on('kot:status_updated', handleKOTStatusUpdated);
+      socketService.on('test:ping', handleTestPing);
 
       // Cleanup on unmount or user change
       return () => {
         socketService.off('kot:created', handleKOTCreated);
         socketService.off('kot:status_updated', handleKOTStatusUpdated);
+         socketService.off('test:ping', handleTestPing);
         disconnect();
       };
     }
   }, [connect, disconnect, authUser, branchUser]);
+
 
   // Clear notifications
   const clearNotifications = useCallback(() => {

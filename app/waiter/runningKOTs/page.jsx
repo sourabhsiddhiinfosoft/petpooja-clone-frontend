@@ -25,6 +25,9 @@ export default function OwnerKOTs() {
   
   const { data: kots = [], isLoading, isError, refetch } = useGetKOTListQuery(q, { skip: !restaurantId });
   const { addNotificationHandler } = useNotifications();
+       const { isConnected, connectionError } = useNotifications();
+     console.log('Socket connected:', isConnected, 'Error:', connectionError);
+     
   
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'preparing', 'ready'

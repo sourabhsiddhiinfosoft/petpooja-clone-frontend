@@ -1,24 +1,26 @@
 "use client";
 import { useMemo, useState, useEffect } from 'react';
 import { useCurrentBranch } from '../../../store/hooks/useCurrentBranch';
-import { 
-  useGetKOTListQuery, 
-  useUpdateKOTStatusMutation 
+import {
+  useGetKOTListQuery,
+  useUpdateKOTStatusMutation
 } from '../../../store/api/ownerApi'; // Adjust if in staffApi
 import DashboardLayout from '../../../components/DashboardLayout';
 import { TableLoading } from '../../../components/Loading/tableLoading';
 import toast from 'react-hot-toast';
 import { useNotifications } from '../../../contexts/NotificationContext';
-import { 
-  MagnifyingGlassCircleIcon as SearchIcon, 
-  FunnelIcon, 
-  ClockIcon, 
+import {
+  MagnifyingGlassCircleIcon as SearchIcon,
+  FunnelIcon,
+  ClockIcon,
   FireIcon, // For preparing (kitchen heat)
-  CheckCircleIcon, 
+  CheckCircleIcon,
   PrinterIcon,
   ExclamationTriangleIcon,
   ArrowPathIcon // For refresh
 } from '@heroicons/react/24/outline';
+import { socket } from '../../../lib/socket';
+import { printKotBill } from '../../../lib/printBill';
 
 export default function ChefKOTs() {
   const { user } = useCurrentBranch();
@@ -27,22 +29,23 @@ export default function ChefKOTs() {
 
   // Build query string (same for both tabs; filter client-side for "Today")
   const q = `${restaurantId ? `restaurantId=${restaurantId}` : ''}${branchId ? `&branchId=${branchId}` : ''}`;
- 
+
 
   const { data: kots = [], isLoading, isError, refetch } = useGetKOTListQuery(q, { skip: !restaurantId });
   const [updateKOTStatus] = useUpdateKOTStatusMutation();
   const { addNotificationHandler } = useNotifications();
-  
+
   const [activeTab, setActiveTab] = useState('latest'); // 'latest' | 'today'
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'preparing', 'ready'
   const [currentPage, setCurrentPage] = useState({ latest: 1, today: 1 }); // Per tab
-  
+
   const itemsPerPage = 6;
 
   // Handle real-time notifications - auto-refresh when new KOT is created
   useEffect(() => {
     const unsubscribe = addNotificationHandler((notification) => {
+      console.log('ChefKOTs: Received notification', notification);
       if (notification.type === 'kot_created') {
         // Auto-refresh KOT list when new KOT is created
         refetch();
@@ -53,6 +56,19 @@ export default function ChefKOTs() {
 
     return unsubscribe;
   }, [addNotificationHandler, refetch]);
+
+  useEffect(() => {
+    socket.emit("joinUser", { userId: user?._id, role: "chef" });
+
+    socket.on("notifyChef", (data) => {
+      toast.success(data.message);
+      console.log("Chef received:", data.kotData);
+    });
+
+    return () => {
+      socket.off("notifyChef");
+    };
+  }, [user]);
 
   // Filter KOTs based on tab
   const filteredKots = useMemo(() => {
@@ -72,10 +88,10 @@ export default function ChefKOTs() {
 
     // Search filter
     if (search) {
-      filtered = filtered.filter((kot) => 
+      filtered = filtered.filter((kot) =>
         kot._id.toLowerCase().includes(search.toLowerCase()) || // KOT ID
         (kot.tableNo || '').toLowerCase().includes(search.toLowerCase()) || // Table
-        kot.items.some(item => 
+        kot.items.some(item =>
           item.name.toLowerCase().includes(search.toLowerCase()) // Item names
         )
       );
@@ -123,12 +139,32 @@ export default function ChefKOTs() {
     );
   };
 
+    const handlePrintKOT = (kotData) => {
+      if(!kotData || kotData.length === 0) return toast.error('No KOT data to print');
+       const restaurant = {
+      name: user?.restaurantName || 'Restaurant Billing',
+    };
+    const taxRate = 0; 
+    const discount = kotData?.discount || 0;
+    // Call the external function with params
+    printKotBill({
+      kotData,
+      restaurant,
+      taxRate, // Adjust as needed
+      discount,
+    });
+      toast.success('KOT printed');
+    };
+
   // Update KOT status handler
-  const handleUpdateStatus = async (kotId, newStatus) => {
+  const handleUpdateStatus = async (kotId, newStatus,cancelReason) => {
     try {
-        console.log('Updating KOT status:', kotId, newStatus);
-      await updateKOTStatus({ kotId, status: newStatus }).unwrap();
+      console.log('Updating KOT status:', kotId, newStatus);
+      await updateKOTStatus({ kotId, status: newStatus,cancelReason }).unwrap();
       toast.success(`KOT ${kotId.slice(-6).toUpperCase()} updated to ${newStatus}`);
+      const waiterId = "68e754feb5f78a335c2fe215";
+      socket.emit("kotStatusUpdated", { kotId, newStatus, waiterId });
+      // toast.success(`KOT ${kotId} marked as ${newStatus}`);
       refetch(); // Refetch to update UI
     } catch (error) {
       console.error('Failed to update KOT status:', error);
@@ -187,11 +223,10 @@ export default function ChefKOTs() {
                       setSearch(''); // Clear filters on switch
                       setStatusFilter('all');
                     }}
-                    className={`px-4 py-2 -mb-px text-sm font-medium border-b-2 ${
-                      activeTab === tab
+                    className={`px-4 py-2 -mb-px text-sm font-medium border-b-2 ${activeTab === tab
                         ? 'border-orange-500 text-orange-600'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
+                      }`}
                   >
                     {tab === 'today' ? "Today's KOTs" : "Latest KOTs"}
                   </button>
@@ -235,7 +270,7 @@ export default function ChefKOTs() {
         {/* KOTs Grid */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {isLoading && <TableLoading columns={3} />}
-          
+
           {isError && (
             <div className="p-6 text-center">
               <ExclamationTriangleIcon className="h-12 w-12 text-red-400 mx-auto mb-4" />
@@ -275,52 +310,71 @@ export default function ChefKOTs() {
                         </div>
 
                         {/* Items List */}
-                        <div className="p-4 max-h-48 overflow-y-auto">
-                          {kot.items && kot.items.length > 0 ? (
-                            <ul className="space-y-2">
-                              {kot.items.map((item, idx) => (
-                                <li key={idx} className="flex justify-between items-center text-sm">
-                                  <span className="text-gray-700">{item.name}</span>
-                                  <span className="font-medium text-orange-600">x{item.qty}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-gray-500 text-sm italic">No items</p>
-                          )}
-                        </div>
+                                    <div className="p-4 max-h-48 overflow-y-auto">
+                                      {kot.items && kot.items.length > 0 ? (
+                                      <ul className="space-y-2">
+                                        {kot.items.map((item, idx) => (
+                                        <li key={idx} className="flex justify-between items-center text-sm">
+                                          <span className="text-gray-700">{item.name}</span>
+                                          <span className="font-medium text-orange-600">x{item.qty}</span>
+                                        </li>
+                                        ))}
+                                      </ul>
+                                      ) : (
+                                      <p className="text-gray-500 text-sm italic">No items</p>
+                                      )}
+                                    </div>
 
-                                               {/* Status Update Buttons */}
-                        <div className="p-4 bg-gray-50 border-t border-gray-200">
-                          <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                            {kot.status === 'pending' && (
-                              <button
-                                onClick={() => handleUpdateStatus(kot._id, 'preparing')}
-                                className="flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-yellow-600 hover:to-orange-700 transition-all text-sm"
-                              >
-                                <FireIcon className="h-4 w-4" />
-                                Start Preparing
-                              </button>
-                            )}
-                            {kot.status === 'preparing' && (
-                              <button
-                                onClick={() => handleUpdateStatus(kot._id, 'ready')}
-                                className="flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-red-600 text-white py-2 px-4 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all text-sm"
-                              >
-                                <CheckCircleIcon className="h-4 w-4" />
-                                Mark Ready
-                              </button>
-                            )}
-                            {kot.status === 'ready' && (
-                              <div className="text-center text-sm text-green-600 font-medium">
-                                <CheckCircleIcon className="h-4 w-4 inline mr-1" />
-                                Ready for Pickup
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                                    {/* Status Dropdown */}
+                                    <div className="p-4 bg-gray-50 border-t border-gray-200">
+                                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-sm text-gray-600">Change Status:</span>
 
-                        {/* Footer: Total & Time */}
+                                        {/* Determine allowed transitions */}
+                                        <select
+                                        value={kot.status}
+                                        onChange={(e) => {
+                                          const newStatus = e.target.value;
+                                          if (newStatus !== kot.status) {
+                                          handleUpdateStatus(kot._id, newStatus);
+                                          }
+                                        }}
+                                        className="py-2 pl-3 pr-8 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none bg-white"
+                                        aria-label={`Change status for KOT ${kot._id}`}
+                                        >
+                                        {(() => {
+                                          const opts = [];
+                                          if (kot.status === 'pending') {
+                                          opts.push(<option key="pending" value="pending">Pending</option>);
+                                          opts.push(<option key="preparing" value="preparing">Preparing</option>);
+                                          opts.push(<option key="cancelled" value="cancelled">Cancelled</option>);
+                                          } else if (kot.status === 'preparing') {
+                                          opts.push(<option key="preparing" value="preparing">Preparing</option>);
+                                          opts.push(<option key="ready" value="ready">Ready</option>);
+                                          opts.push(<option key="cancelled" value="cancelled">Cancelled</option>);
+                                          } else if (kot.status === 'ready') {
+                                          opts.push(<option key="ready" value="ready">Ready</option>);
+                                          } else if (kot.status === 'cancelled') {
+                                          opts.push(<option key="cancelled" value="cancelled">Cancelled</option>);
+                                          } else {
+                                          opts.push(<option key="pending" value="pending">Pending</option>);
+                                          opts.push(<option key="preparing" value="preparing">Preparing</option>);
+                                          opts.push(<option key="ready" value="ready">Ready</option>);
+                                          opts.push(<option key="cancelled" value="cancelled">Cancelled</option>);
+                                          }
+                                          return opts;
+                                        })()}
+                                        </select>
+                                      </div>
+
+                                      <div className="text-sm text-gray-500">
+                                        <span className="hidden sm:inline">Current: </span>
+                                        <StatusBadge status={kot.status} />
+                                      </div>
+                                      </div>
+                                    </div>
+
                         <div className="p-4 border-t border-gray-200">
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -329,15 +383,12 @@ export default function ChefKOTs() {
                             </div>
                             <div className="text-right">
                               <p className="text-sm text-gray-600">Total:</p>
-                              <p className="font-bold text-lg text-orange-600">₹{kot.total?.toFixed(2) || '0.00'}</p>
+                              <p className="font-bold text-lg text-orange-600">₹{kot?.orderId?.total?.toFixed(2) || '0.00'}</p>
                             </div>
                           </div>
                           {/* Optional Print Button */}
                           <button
-                            onClick={() => {
-                              // Print functionality can be implemented here
-                              toast.info('Print functionality coming soon');
-                            }}
+                            onClick={() =>handlePrintKOT(kot)}
                             className="mt-3 w-full bg-gradient-to-r from-gray-500 to-gray-600 text-white py-2 rounded-lg font-semibold hover:from-gray-600 hover:to-gray-700 transition-all flex items-center justify-center gap-2 text-sm"
                           >
                             <PrinterIcon className="h-4 w-4" />
@@ -355,18 +406,18 @@ export default function ChefKOTs() {
                       {activeTab === 'today' ? "No KOTs Today" : "No KOTs in the Kitchen"}
                     </h3>
                     <p className="text-gray-500 mb-4">
-                      {search || statusFilter !== 'all' 
-                        ? 'Try adjusting your search or filter to see orders.' 
-                        : activeTab === 'today' 
+                      {search || statusFilter !== 'all'
+                        ? 'Try adjusting your search or filter to see orders.'
+                        : activeTab === 'today'
                           ? "No kitchen orders for today yet. Check back soon!"
                           : "No pending orders. The kitchen is ready for the next rush!"
                       }
                     </p>
                     <button
-                      onClick={() => { 
-                        setSearch(''); 
-                        setStatusFilter('all'); 
-                        updateCurrentPage(1); 
+                      onClick={() => {
+                        setSearch('');
+                        setStatusFilter('all');
+                        updateCurrentPage(1);
                       }}
                       className="bg-orange-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-orange-700 transition"
                     >
@@ -386,21 +437,20 @@ export default function ChefKOTs() {
                   >
                     Previous
                   </button>
-                  
+
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                     <button
                       key={page}
                       onClick={() => updateCurrentPage(page)}
-                      className={`px-3 py-2 text-sm font-medium rounded-md ${
-                        currentTabPage === page
+                      className={`px-3 py-2 text-sm font-medium rounded-md ${currentTabPage === page
                           ? 'bg-orange-600 text-white'
                           : 'bg-white border border-gray-300 hover:bg-gray-50'
-                      }`}
+                        }`}
                     >
                       {page}
                     </button>
                   ))}
-                  
+
                   <button
                     onClick={() => updateCurrentPage(Math.min(currentTabPage + 1, totalPages))}
                     disabled={currentTabPage === totalPages}

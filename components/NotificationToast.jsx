@@ -19,6 +19,7 @@ export function NotificationToast() {
   const [displayedNotifications, setDisplayedNotifications] = useState(new Set());
 
   useEffect(() => {
+    console.log('NotificationToast==>>> Setting up notification handler',displayedNotifications);
     // Register notification handler
     const unsubscribe = addNotificationHandler((notification) => {
       // Check if notification was already displayed
@@ -142,7 +143,7 @@ export function NotificationConnectionStatus() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-50">
+    <div className="fixed bottom-4 right-4 z-50">
       <div className={`px-3 py-1 rounded-full text-xs font-medium ${
         isConnected 
           ? 'bg-green-100 text-green-800' 

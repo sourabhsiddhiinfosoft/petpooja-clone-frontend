@@ -48,8 +48,10 @@ const DashboardLayout = ({ children, userType }) => {
         { name: 'MANAGE', isHeader: true },
         { name: 'Restaurants', href: `/${userType}/restaurants`, icon: BuildingStorefrontIcon },
         { name: 'Owners', href: `/${userType}/owners`, icon: UserGroupIcon },
-        { name: 'REPORTS', isHeader: true },
-        { name: 'Reports', href: `/${userType}/reports`, icon: PresentationChartLineIcon },
+        { name: 'Support Tickets', href: `/${userType}/support`, icon: PresentationChartLineIcon },
+        { name: 'Settings', href: `/${userType}/settings`, icon: CogIcon },
+        // { name: 'REPORTS', isHeader: true },
+        // { name: 'Reports', href: `/${userType}/reports`, icon: PresentationChartLineIcon },
       ];
     }
 
@@ -65,6 +67,7 @@ const DashboardLayout = ({ children, userType }) => {
         { name: 'Inventory', href: `/${userType}/inventory`, icon: CubeIcon },
         { name: 'Tables', href: `/${userType}/tables`, icon: TableCellsIcon },
         { name: 'Areas', href: `/${userType}/areas`, icon: MapIcon },
+        {name: 'Discounts', href: `/${userType}/discounts`, icon: DocumentTextIcon },
         { name: 'ORDER MANAGEMENT', isHeader: true },
         { name: 'Take Order', href: `/${userType}/takeOrder`, icon: DocumentTextIcon },
         { name: 'Orders', href: `/${userType}/orders`, icon: DocumentTextIcon },
@@ -73,6 +76,9 @@ const DashboardLayout = ({ children, userType }) => {
         { name: 'REPORTS', isHeader: true },
         { name: 'Reports', href: `/${userType}/reports`, icon: PresentationChartLineIcon },
         { name: 'Settings', href: `/${userType}/settings`, icon: CogIcon },
+        { name: 'Support', isHeader: true },
+        { name: 'Support Tickets', href: `/${userType}/support`, icon: PresentationChartLineIcon },
+
       ];
     }
 
@@ -82,6 +88,7 @@ const DashboardLayout = ({ children, userType }) => {
         { name: 'Dashboard', href: `/${userType}/dashboard`, icon: ChartBarIcon },
         { name: 'SERVICE', isHeader: true },
         { name: 'Take Order', href: `/${userType}/takeOrder`, icon: TableCellsIcon },
+        {name: 'Merge Tables', href: `/${userType}/merge-tables`, icon: TableCellsIcon },
         { name: 'Kots', href: `/${userType}/runningKOTs`, icon: DocumentTextIcon },
         { name: 'Running Tables', href: `/${userType}/runningTables`, icon: TableCellsIcon },
         { name: 'Orders', href: `/${userType}/orders`, icon: DocumentTextIcon },
@@ -113,7 +120,7 @@ const DashboardLayout = ({ children, userType }) => {
     .split(" ")
     .map(word => word.charAt(0).toUpperCase())
     .join("");
-
+    
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Mobile sidebar overlay */}
@@ -134,7 +141,7 @@ const DashboardLayout = ({ children, userType }) => {
             <div className="h-8 w-8 rounded-lg bg-orange-500 text-white flex items-center justify-center font-bold text-sm">
               {userType === 'admin' ? 'AD' : userType === 'owner' ? 'OW' : 'ST'}
             </div>
-            <span className="font-bold text-lg">Restaurant</span>
+            <span className="font-bold text-lg">{user?.restaurantName || "Restaurant"}</span>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}

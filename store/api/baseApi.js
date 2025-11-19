@@ -40,6 +40,14 @@ export const baseApi = createApi({
     'KOT',
     'KOTs',
     'Branches',
+    'Notifications',
+    'Reports',
+    'Customers',
+    'Discounts',
+    'UserSettings',
+    'RestaurantSettings',
+    'SupportTickets',
+    'Settings'
   ],
   endpoints: () => ({}),
 });
